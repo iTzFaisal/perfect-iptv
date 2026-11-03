@@ -29,24 +29,13 @@ EPG and a remote-first player, running entirely on a Samsung TV.
 
 ## Download
 
-Build the installable package:
-
-```sh
-npm install
-npm run package
-```
-
-The output is:
-
-```text
-dist/PerfectIPTV-1.0.2.wgt
-```
-
-If a release is published for this project, use the `.wgt` attached to the
-latest release instead; otherwise the file above is the package to install.
+Grab the latest `PerfectIPTV-1.0.2.wgt` from
+[Releases](https://github.com/iTzFaisal/perfect-iptv/releases/latest), then
+follow [Install on the TV](#install-on-the-tv).
 
 The package is **unsigned**: [Tizen Homebrew](https://github.com/SushyDev/tizen-homebrew)
 re-signs it during install, or you can sign it yourself with Tizen Studio.
+To build from source, see [Build](#build).
 
 The version comes from `config.xml` (`<widget version="…">`). The build fails
 if `package.json` has a different `version`, so the WGT and npm metadata cannot
