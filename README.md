@@ -3,12 +3,6 @@
 A Tizen web app for your **Xtream Codes** provider: live TV, movies, series,
 EPG and a remote-first player, running entirely on a Samsung TV.
 
-This is **not a port of the Android APK**. Samsung TVs run **Tizen**, not
-Android TV, so the IPTV Smarters APK cannot be installed or repackaged for
-them. This app uses the same Xtream credentials and rebuilds the experience as
-a Tizen web application. It is an independent project, not affiliated with
-IPTV Smarters, Samsung, or Xtream Codes.
-
 ![Live TV](docs/live.png)
 
 ## What it does
@@ -252,18 +246,18 @@ Studio does.
 
 ## Controls
 
-| Remote | Action |
-| --- | --- |
-| Arrows | Move focus |
-| OK | Select; play/pause in the player |
-| Left / Right (in player) | Seek back / forward 10 seconds |
-| Up / Down (in player) | Show the player controls |
-| Back / Return | Close the player, go back, or exit the app from Live TV |
-| Info | Open the TV guide for the focused channel; in a live stream, show the guide |
-| Channel Up / Down (in player) | Previous / next live channel |
-| Media Play/Pause/Stop | Player controls |
-| Media Rewind/Fast Forward | Seek back / forward 10 seconds |
-| In a text field | OK opens the keyboard; Back closes it |
+| Remote                        | Action                                                                      |
+| ----------------------------- | --------------------------------------------------------------------------- |
+| Arrows                        | Move focus                                                                  |
+| OK                            | Select; play/pause in the player                                            |
+| Left / Right (in player)      | Seek back / forward 10 seconds                                              |
+| Up / Down (in player)         | Show the player controls                                                    |
+| Back / Return                 | Close the player, go back, or exit the app from Live TV                     |
+| Info                          | Open the TV guide for the focused channel; in a live stream, show the guide |
+| Channel Up / Down (in player) | Previous / next live channel                                                |
+| Media Play/Pause/Stop         | Player controls                                                             |
+| Media Rewind/Fast Forward     | Seek back / forward 10 seconds                                              |
+| In a text field               | OK opens the keyboard; Back closes it                                       |
 
 Back on the Live TV root is a double-press exit, so a single accidental press
 does not close the app.
