@@ -139,6 +139,7 @@
     App.view = 'login';
     renderSavedAccounts();
     fillLoginForm(options.account, options.clear);
+    setPasswordVisible(false);
     if (options.error) showLoginError(options.error);
     else hideLoginError();
     setTimeout(function () {
@@ -158,6 +159,18 @@
     $('#login-username').value = source ? (source.username || '') : '';
     $('#login-password').value = source ? (source.password || '') : '';
     $('#login-proxy').value = source ? (source.proxy || '') : '';
+  }
+
+  function setPasswordVisible(visible) {
+    var input = $('#login-password');
+    var btn = $('#login-password-toggle');
+    if (!input || !btn) return;
+    input.type = visible ? 'text' : 'password';
+    btn.setAttribute('aria-pressed', visible ? 'true' : 'false');
+    btn.setAttribute('aria-label', visible ? 'Hide password' : 'Show password');
+    btn.setAttribute('title', visible ? 'Hide password' : 'Show password');
+    var use = btn.querySelector('use');
+    if (use) use.setAttribute('href', visible ? '#i-eye-off' : '#i-eye');
   }
 
   function showLoginError(message) {
@@ -1136,6 +1149,31 @@
     });
 
     $('#login-form').addEventListener('submit', handleLoginSubmit);
+
+    var passwordInput = $('#login-password');
+    var passwordToggle = $('#login-password-toggle');
+    if (passwordInput && passwordToggle) {
+      passwordToggle.addEventListener('click', function () {
+        setPasswordVisible(passwordInput.type === 'password');
+      });
+      // On a TV remote, Right at the end of the password reaches the eye button.
+      passwordInput.addEventListener('keydown', function (e) {
+        var atEnd = passwordInput.selectionStart === passwordInput.value.length &&
+          passwordInput.selectionEnd === passwordInput.value.length;
+        if (atEnd && (e.key === 'ArrowRight' || e.keyCode === 39)) {
+          e.preventDefault();
+          UI.focus(passwordToggle);
+        }
+      });
+      passwordToggle.addEventListener('keydown', function (e) {
+        if (e.key === 'ArrowLeft' || e.keyCode === 37) {
+          e.preventDefault();
+          UI.focus(passwordInput);
+          var end = passwordInput.value.length;
+          try { passwordInput.setSelectionRange(end, end); } catch (err) { /* ignore */ }
+        }
+      });
+    }
 
     $('#saved-list').addEventListener('click', function (e) {
       var del = e.target.closest('[data-delete-account]');
