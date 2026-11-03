@@ -1,0 +1,185 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to build and publish (must match the version in config.xml, e.g. v1.0.3)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.event.inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  # The Playwright tests use the runner's preinstalled Google Chrome.
+  PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
+
+jobs:
+  release:
+    name: Build and publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out the tag
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libxml2-utils zip
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify the tag matches config.xml
+        env:
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          VERSION="$(xmllint --xpath 'string(/*[local-name()="widget"]/@version)' config.xml)"
+          if [[ "$TAG" != "v$VERSION" ]]; then
+            echo "::error::Tag $TAG does not match config.xml version $VERSION (expected v$VERSION)."
+            exit 1
+          fi
+          PKG_VERSION="$(node -p "require('./package.json').version")"
+          if [[ "$PKG_VERSION" != "$VERSION" ]]; then
+            echo "::error::package.json version $PKG_VERSION does not match config.xml version $VERSION."
+            exit 1
+          fi
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+
+      - name: Check JavaScript and XML syntax
+        run: |
+          set -euo pipefail
+          for f in js/*.js; do node --check "$f"; done
+          xmllint --noout config.xml
+
+      - name: Run Playwright tests
+        run: |
+          set -euo pipefail
+          google-chrome --version
+          npm run serve &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+          READY=0
+          for _ in $(seq 1 30); do
+            if curl -fsS http://localhost:4173/ >/dev/null 2>&1; then
+              READY=1
+              break
+            fi
+            sleep 1
+          done
+          if [[ "$READY" != 1 ]]; then
+            echo "::error::Mock Xtream server did not start on port 4173."
+            exit 1
+          fi
+          npm test
+          npm run test:native
+
+      - name: Build the WGT
+        run: |
+          set -euo pipefail
+          npm run package
+          WGT="dist/PerfectIPTV-$VERSION.wgt"
+          SHA="dist/PerfectIPTV-$VERSION.wgt.sha256"
+          test -f "$WGT"
+          (cd dist && shasum -a 256 "PerfectIPTV-$VERSION.wgt" > "PerfectIPTV-$VERSION.wgt.sha256")
+          cat "$SHA"
+
+      - name: Upload the build artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: PerfectIPTV-${{ env.VERSION }}
+          path: |
+            dist/PerfectIPTV-${{ env.VERSION }}.wgt
+            dist/PerfectIPTV-${{ env.VERSION }}.wgt.sha256
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Write release notes
+        env:
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          WGT="PerfectIPTV-$VERSION.wgt"
+          SHA256="$(cut -d ' ' -f 1 "dist/$WGT.sha256")"
+          PKG_ID="$(xmllint --xpath 'string(/*[local-name()="widget"]/*[local-name()="application"]/@package)' config.xml)"
+          APP_ID="$(xmllint --xpath 'string(/*[local-name()="widget"]/*[local-name()="application"]/@id)' config.xml)"
+          CHANGES="$(gh api "repos/$GITHUB_REPOSITORY/releases/generate-notes" -f tag_name="$TAG" -f target_commitish="$GITHUB_SHA" --jq .body 2>/dev/null || true)"
+
+          {
+            echo "## Perfect IPTV $VERSION"
+            echo
+            echo "A Samsung Tizen TV IPTV player for Xtream Codes providers."
+            echo
+            echo "This is a Tizen web app, not an Android APK. The Android app cannot run on Tizen."
+            echo
+            echo "### Install"
+            echo
+            echo "1. Download \`$WGT\`."
+            echo "2. Enable Developer Mode on the TV."
+            echo "3. Install with [Tizen Homebrew](https://github.com/SushyDev/tizen-homebrew) (recommended), or sign the package with Tizen Studio and install it over SDB."
+            echo
+            echo "Tizen Homebrew re-signs the package for your TV. The attached WGT is unsigned."
+            echo
+            echo "### Package"
+            echo
+            echo "- Package ID: \`$PKG_ID\`"
+            echo "- App ID: \`$APP_ID\`"
+            echo "- Built from commit \`$GITHUB_SHA\`"
+            echo
+            echo "### Checksum"
+            echo
+            echo '```text'
+            echo "$SHA256  $WGT"
+            echo '```'
+            echo
+            echo "Verify with \`shasum -a 256 -c $WGT.sha256\`."
+            if [[ -n "$CHANGES" ]]; then
+              echo
+              echo "## Changes"
+              echo
+              echo "$CHANGES"
+            fi
+          } > release-notes.md
+
+      - name: Create the GitHub release
+        env:
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          WGT="dist/PerfectIPTV-$VERSION.wgt"
+          SHA="dist/PerfectIPTV-$VERSION.wgt.sha256"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists; replacing its assets."
+            gh release upload "$TAG" "$WGT" "$SHA" --clobber
+          else
+            PRERELEASE=()
+            if [[ "$VERSION" == *-* ]]; then
+              PRERELEASE=(--prerelease)
+            fi
+            gh release create "$TAG" "$WGT" "$SHA" \
+              --verify-tag \
+              --title "Perfect IPTV $VERSION" \
+              --notes-file release-notes.md \
+              "${PRERELEASE[@]}"
+          fi

@@ -55,6 +55,10 @@ only; do not build or port it.
   vendor`. Add new runtime files there.
 - The build fails if `config.xml` and `package.json` versions differ. Tizen uses
   the `config.xml` version; `package.json` is only npm metadata.
+- Pushing a `v*` tag runs `.github/workflows/release.yml`: it verifies the tag
+  matches `config.xml`, runs both Playwright suites, builds the WGT, and
+  publishes the package and `.sha256` to GitHub Releases. The tag must be `v` +
+  the `config.xml` version. Manual runs take an existing tag as input.
 - The WGT is unsigned by design. Tizen Homebrew (recommended) or Tizen Studio
   signs it. `scripts/deploy.sh` installs only and never signs. There is no
   `tizen`/`sdb` in this environment, so on-device install cannot be verified

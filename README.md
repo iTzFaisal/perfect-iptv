@@ -29,17 +29,13 @@ EPG and a remote-first player, running entirely on a Samsung TV.
 
 ## Download
 
-Grab the latest `PerfectIPTV-1.0.2.wgt` from
+Grab the latest `PerfectIPTV-X.X.X.wgt` from
 [Releases](https://github.com/iTzFaisal/perfect-iptv/releases/latest), then
 follow [Install on the TV](#install-on-the-tv).
 
 The package is **unsigned**: [Tizen Homebrew](https://github.com/SushyDev/tizen-homebrew)
 re-signs it during install, or you can sign it yourself with Tizen Studio.
 To build from source, see [Build](#build).
-
-The version comes from `config.xml` (`<widget version="…">`). The build fails
-if `package.json` has a different `version`, so the WGT and npm metadata cannot
-drift apart.
 
 ## Requirements
 
@@ -96,7 +92,7 @@ npm install
 npm run package
 ```
 
-This produces `dist/PerfectIPTV-1.0.2.wgt`.
+This produces `dist/PerfectIPTV-1.0.3.wgt`.
 
 To sign it with a Tizen Studio certificate profile instead:
 
@@ -104,7 +100,7 @@ To sign it with a Tizen Studio certificate profile instead:
 TIZEN_PROFILE=YOUR_PROFILE npm run package
 ```
 
-That produces `dist/PerfectIPTV-1.0.2-signed.wgt`. You can also re-sign the
+That produces `dist/PerfectIPTV-1.0.3-signed.wgt`. You can also re-sign the
 unsigned file manually; see Option B below.
 
 ### Optional proxy deployment
@@ -166,7 +162,7 @@ TV, re-signs packages for you, and gives you a phone interface for installing
    screen. Open that address on your phone and pair.
 
 5. In the phone interface, open **Upload** and choose
-   `dist/PerfectIPTV-1.0.2.wgt`. Tizen Homebrew re-signs it for your TV and
+   `dist/PerfectIPTV-1.0.3.wgt`. Tizen Homebrew re-signs it for your TV and
    installs it.
 
 6. Perfect IPTV now appears in the TV’s app list.
@@ -198,8 +194,8 @@ on your TV.
 
    ```sh
    mkdir -p dist/signed
-   cp dist/PerfectIPTV-1.0.2.wgt dist/signed/
-   tizen package -t wgt -s YOUR_PROFILE --output dist/signed -- dist/signed/PerfectIPTV-1.0.2.wgt
+   cp dist/PerfectIPTV-1.0.3.wgt dist/signed/
+   tizen package -t wgt -s YOUR_PROFILE --output dist/signed -- dist/signed/PerfectIPTV-1.0.3.wgt
    ```
 
    Or build the signed package directly:
@@ -208,28 +204,28 @@ on your TV.
    TIZEN_PROFILE=YOUR_PROFILE npm run package
    ```
 
-   This produces `dist/PerfectIPTV-1.0.2-signed.wgt`. If you use this path,
+   This produces `dist/PerfectIPTV-1.0.3-signed.wgt`. If you use this path,
    install that file from `dist/` instead of the re-signed copy in `dist/signed/`.
 
 5. Connect to the TV and install the **signed** package:
 
    ```sh
    sdb connect YOUR_TV_IP:26101
-   tizen install -n PerfectIPTV-1.0.2.wgt -s YOUR_TV_IP:26101 -- dist/signed
+   tizen install -n PerfectIPTV-1.0.3.wgt -s YOUR_TV_IP:26101 -- dist/signed
    tizen run -p iTzFaisal1 -s YOUR_TV_IP:26101
    ```
 
    Or use the helper:
 
    ```sh
-   scripts/deploy.sh YOUR_TV_IP dist/signed/PerfectIPTV-1.0.2.wgt
+   scripts/deploy.sh YOUR_TV_IP dist/signed/PerfectIPTV-1.0.3.wgt
    ```
 
 If your firmware rejects `tizen install`, see the field guide
 [Sideloading an IPTV App onto a Retail Samsung Smart TV](https://github.com/AscendedStarr/samsung-tv-iptv-guide)
 for the `vd_appinstall` path and certificate/DUID details.
 
-A retail TV will not accept the unsigned `dist/PerfectIPTV-1.0.2.wgt`
+A retail TV will not accept the unsigned `dist/PerfectIPTV-1.0.3.wgt`
 directly. It must be signed for that TV. That is what Tizen Homebrew or Tizen
 Studio does.
 
@@ -275,7 +271,7 @@ that script on the TV.
 npm test              # full Playwright UI flow with the mock provider
 npm run test:native   # CORS-blocked provider + emulated Tizen downloader
 npm run test:real     # optional real-provider smoke test
-npm run package       # build dist/PerfectIPTV-1.0.2.wgt
+npm run package       # build dist/PerfectIPTV-1.0.3.wgt
 ```
 
 `npm run test:real` reads `iptv-auth.txt` (gitignored) and expects the local
@@ -306,7 +302,7 @@ proxy/
   worker.mjs             Cloudflare Worker CORS proxy
   server.js              Local Node CORS proxy
 scripts/
-  package.sh             Build dist/PerfectIPTV-1.0.2.wgt
+  package.sh             Build dist/PerfectIPTV-1.0.3.wgt
   deploy.sh              sdb/tizen install helper
   test-ui.js             Playwright UI flow
   test-native.js         Native-downloader fallback test
