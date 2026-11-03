@@ -1,0 +1,19 @@
+{
+  "name": "perfect-iptv",
+  "version": "1.0.2",
+  "private": true,
+  "description": "A native Samsung Tizen TV IPTV player for Xtream Codes providers.",
+  "scripts": {
+    "serve": "node mock/server.js",
+    "test": "node scripts/test-ui.js",
+    "test:native": "node scripts/test-native.js",
+    "test:real": "node scripts/test-real.js",
+    "package": "bash scripts/package.sh"
+  },
+  "keywords": ["tizen", "samsung", "iptv", "xtream"],
+  "license": "MIT",
+  "type": "commonjs",
+  "devDependencies": {
+    "playwright": "^1.64.1"
+  }
+}

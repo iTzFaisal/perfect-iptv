@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<widget xmlns="http://www.w3.org/ns/widgets"
+        xmlns:tizen="http://tizen.org/ns/widgets"
+        id="http://perfectiptv.app"
+        version="1.0.2"
+        viewmodes="maximized">
+
+  <tizen:application id="iTzFaisal1.PerfectIPTV"
+                     package="iTzFaisal1"
+                     required_version="6.0"/>
+
+  <content src="index.html"/>
+
+  <feature name="http://tizen.org/feature/screen.size.all"/>
+
+  <icon src="icon.png"/>
+  <name>Perfect IPTV</name>
+  <description>Live TV, movies and series for your Samsung TV. Bring your own Xtream Codes provider.</description>
+  <author href="https://github.com/" email="noreply@example.com">Perfect IPTV</author>
+  <license>MIT</license>
+
+  <tizen:profile name="tv-samsung"/>
+
+  <tizen:setting screen-orientation="landscape"
+                 context-menu="disable"
+                 background-support="disable"
+                 encryption="disable"
+                 install-location="auto"
+                 hwkey-event="enable"/>
+
+  <tizen:privilege name="http://tizen.org/privilege/internet"/>
+  <tizen:privilege name="http://tizen.org/privilege/tv.inputdevice"/>
+  <tizen:privilege name="http://tizen.org/privilege/download"/>
+  <tizen:privilege name="http://tizen.org/privilege/filesystem.read"/>
+  <tizen:privilege name="http://tizen.org/privilege/filesystem.write"/>
+  <tizen:privilege name="http://developer.samsung.com/privilege/avplay"/>
+
+  <!-- Allow the app to reach the user's IPTV server and image/stream hosts. -->
+  <access origin="*" subdomains="true"/>
+
+  <tizen:content-security-policy>
+    default-src 'self';
+    script-src 'self';
+    style-src 'self' 'unsafe-inline';
+    img-src 'self' data: blob: http: https:;
+    media-src 'self' data: blob: http: https:;
+    connect-src 'self' http: https:;
+    font-src 'self' data:;
+    worker-src 'self' blob:;
+    child-src 'self' blob:;
+    object-src 'self' blob:;
+    base-uri 'self';
+  </tizen:content-security-policy>
+</widget>

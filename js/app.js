@@ -1,0 +1,1337 @@
+/* ============================================================
+   Perfect IPTV — application controller
+   ============================================================ */
+(function () {
+  'use strict';
+
+  var IPTV = window.IPTV;
+  var $ = IPTV.$;
+  var $$ = IPTV.$$;
+  var UI = IPTV.UI;
+  var Store = IPTV.Store;
+  var Screens = IPTV.Screens;
+  var Player = IPTV.Player;
+
+  var VERSION = '1.0.0';
+
+  function freshLive() {
+    return {
+      categories: [], categoryId: 'all', items: [], loading: false, error: null,
+      limit: 120, selectedId: null, epg: null, epgLoading: false,
+      loadedCategory: null, token: 0
+    };
+  }
+  function freshVod() {
+    return { categories: [], categoryId: 'all', items: [], loading: false, error: null, limit: 120, loadedCategory: null, token: 0 };
+  }
+
+  var App = {
+    version: VERSION,
+    api: null,
+    account: null,
+    view: 'live',
+    state: {
+      live: freshLive(),
+      vod: freshVod(),
+      series: freshVod(),
+      favorites: { tab: 'live' },
+      search: { query: '', results: { live: [], vod: [], series: [] }, loading: false, error: null, token: 0 }
+    },
+    cache: { epg: {}, vodInfo: {}, seriesInfo: {}, all: null },
+    modalContext: null,
+    epgToken: 0,
+    modalToken: 0,
+    exitArmed: false
+  };
+
+  window.IPTV.App = App;
+
+  /* ---------------- Small helpers ---------------- */
+
+  function loginVisible() { return !$('#login-screen').classList.contains('hidden'); }
+  function shellVisible() { return !$('#shell').classList.contains('hidden'); }
+
+  function selectorFor(el) {
+    if (!el) return null;
+    if (el.id) return '#' + el.id;
+    var action = el.getAttribute('data-action');
+    if (!action) return null;
+    var sel = '[data-action="' + action + '"]';
+    ['data-id', 'data-category', 'data-tab', 'data-setting', 'data-value', 'data-type'].forEach(function (attr) {
+      if (el.hasAttribute(attr)) sel += '[' + attr + '="' + el.getAttribute(attr) + '"]';
+    });
+    return sel;
+  }
+
+  function focusInView(selector) {
+    if (selector) {
+      var target = $('#view').querySelector(selector);
+      if (target) { UI.focus(target); return true; }
+    }
+    return false;
+  }
+
+  function focusFirstView() {
+    UI.focusFirst($('#view'));
+  }
+
+  function bootText(text) {
+    var el = $('#boot-text');
+    if (el) el.textContent = text;
+  }
+
+  function finishBoot() {
+    $('#boot-screen').classList.add('hidden');
+  }
+
+  function updateClock() {
+    var el = $('#clock');
+    if (el) el.textContent = IPTV.fmtClock(new Date(), Store.settings.timeFormat);
+  }
+
+  function updateConnection() {
+    var online = navigator.onLine !== false;
+    var wrap = $('.sidebar-status');
+    if (wrap) wrap.classList.toggle('offline', !online);
+    var label = $('#connection-label');
+    if (label) label.textContent = online ? 'Connected' : 'Offline';
+  }
+
+  function updateAccountChip() {
+    var name = (App.account && App.account.name) || 'My IPTV';
+    var server = (App.account && App.account.server) || 'Not connected';
+    var nameEl = $('#account-name');
+    var serverEl = $('#account-server');
+    var avatar = $('#account-avatar');
+    if (nameEl) nameEl.textContent = name;
+    if (serverEl) serverEl.textContent = server.replace(/^https?:\/\//, '');
+    if (avatar) avatar.textContent = IPTV.initials(name);
+  }
+
+  var VIEW_META = {
+    live: { title: 'Live TV', eyebrow: 'Browse' },
+    movies: { title: 'Movies', eyebrow: 'On demand' },
+    series: { title: 'Series', eyebrow: 'Binge-worthy' },
+    favorites: { title: 'Favorites', eyebrow: 'Your list' },
+    search: { title: 'Search', eyebrow: 'Find anything' },
+    settings: { title: 'Settings', eyebrow: 'Preferences' }
+  };
+
+  function updateChrome() {
+    var meta = VIEW_META[App.view] || VIEW_META.live;
+    var title = $('#view-title');
+    var eyebrow = $('#view-eyebrow');
+    if (title) title.textContent = meta.title;
+    if (eyebrow) eyebrow.textContent = meta.eyebrow;
+    $$('#nav .nav-item').forEach(function (btn) {
+      btn.classList.toggle('is-active', btn.getAttribute('data-view') === App.view);
+    });
+  }
+
+  /* ---------------- Login ---------------- */
+
+  function showLogin(options) {
+    options = options || {};
+    if (Player.isOpen()) Player.close();
+    UI.closeModal();
+    $('#shell').classList.add('hidden');
+    $('#login-screen').classList.remove('hidden');
+    App.view = 'login';
+    renderSavedAccounts();
+    fillLoginForm(options.account, options.clear);
+    if (options.error) showLoginError(options.error);
+    else hideLoginError();
+    setTimeout(function () {
+      if (!options.clear && Store.accounts.length) {
+        var first = $('#saved-list [data-account-id]');
+        if (first) { UI.focus(first); return; }
+      }
+      var server = $('#login-server');
+      if (server) UI.focus(server);
+    }, 80);
+  }
+
+  function fillLoginForm(account, clear) {
+    var source = account || (!clear ? Store.activeAccount() : null);
+    $('#login-name').value = source ? (source.name || '') : '';
+    $('#login-server').value = source ? (source.server || '') : '';
+    $('#login-username').value = source ? (source.username || '') : '';
+    $('#login-password').value = source ? (source.password || '') : '';
+    $('#login-proxy').value = source ? (source.proxy || '') : '';
+  }
+
+  function showLoginError(message) {
+    var el = $('#login-error');
+    if (!el) return;
+    el.textContent = message;
+    el.classList.remove('hidden');
+  }
+
+  function hideLoginError() {
+    var el = $('#login-error');
+    if (el) el.classList.add('hidden');
+  }
+
+  function setLoginBusy(busy) {
+    var btn = $('#login-submit');
+    if (!btn) return;
+    btn.disabled = !!busy;
+    var label = btn.querySelector('.btn-label');
+    var spinner = btn.querySelector('.btn-spinner');
+    if (label) label.textContent = busy ? 'Connecting…' : 'Connect';
+    if (spinner) spinner.classList.toggle('hidden', !busy);
+  }
+
+  function renderSavedAccounts() {
+    var wrap = $('#saved-accounts');
+    var list = $('#saved-list');
+    if (!wrap || !list) return;
+    if (!Store.accounts.length) {
+      wrap.classList.add('hidden');
+      list.innerHTML = '';
+      return;
+    }
+    wrap.classList.remove('hidden');
+    list.innerHTML = Store.accounts.map(function (account) {
+      return '<div class="saved-item" data-account-id="' + IPTV.esc(account.id) + '" tabindex="0" data-focusable>' +
+        '<span class="avatar">' + IPTV.esc(IPTV.initials(account.name || account.username)) + '</span>' +
+        '<span class="saved-meta"><strong>' + IPTV.esc(account.name || account.username) + '</strong>' +
+        '<small>' + IPTV.esc(account.server) + ' · ' + IPTV.esc(account.username) + '</small></span>' +
+        '<button class="saved-del" data-delete-account="' + IPTV.esc(account.id) + '" data-focusable aria-label="Delete account">' +
+          IPTV.icon('trash') + '</button>' +
+      '</div>';
+    }).join('');
+  }
+
+  function handleLoginSubmit(e) {
+    e.preventDefault();
+    hideLoginError();
+    var serverRaw = $('#login-server').value.trim();
+    var username = $('#login-username').value.trim();
+    var password = $('#login-password').value;
+    var name = $('#login-name').value.trim();
+    var proxy = $('#login-proxy').value.trim();
+
+    if (!serverRaw) { showLoginError('Please enter your provider server URL.'); UI.focus($('#login-server')); return; }
+
+    // Support pasting a full M3U/get.php URL that already contains credentials.
+    var parsed = IPTV.parseProviderInput(serverRaw);
+    if (!username && parsed.username) username = parsed.username;
+    if (!password && parsed.password) password = parsed.password;
+    if (parsed.username) $('#login-username').value = username;
+    if (parsed.password) $('#login-password').value = password;
+    serverRaw = parsed.server || serverRaw;
+
+    if (!username) { showLoginError('Please enter your username.'); UI.focus($('#login-username')); return; }
+    if (!password) { showLoginError('Please enter your password.'); UI.focus($('#login-password')); return; }
+
+    connect({ name: name, server: serverRaw, username: username, password: password, proxy: proxy }, false);
+  }
+
+  function connect(data, silent) {
+    hideLoginError();
+    var server;
+    try {
+      server = IPTV.normalizeServer(data.server);
+    } catch (err) {
+      if (silent) showLogin({ error: err.message });
+      else { showLoginError(err.message); setLoginBusy(false); }
+      return Promise.resolve(false);
+    }
+
+    setLoginBusy(true);
+    bootText('Connecting to your provider…');
+    var api = new IPTV.Xtream({
+      server: server,
+      username: data.username,
+      password: data.password,
+      proxy: data.proxy || ''
+    });
+
+    return api.authenticate().then(function (auth) {
+      var account = Store.addAccount({
+        name: data.name || ('My IPTV'),
+        server: server,
+        username: data.username,
+        password: data.password,
+        proxy: data.proxy || '',
+        userInfo: auth.userInfo,
+        serverInfo: auth.serverInfo,
+        lastConnected: Date.now()
+      });
+      App.account = account;
+      App.api = new IPTV.Xtream(account);
+      updateAccountChip();
+      return loadCategories().then(function () {
+        finishBoot();
+        $('#login-screen').classList.add('hidden');
+        $('#shell').classList.remove('hidden');
+        setLoginBusy(false);
+        updateConnection();
+        updateAccountChip();
+        UI.toast('Connected to ' + (account.name || account.username));
+        return switchView('live');
+      });
+    }).catch(function (err) {
+      setLoginBusy(false);
+      var message = IPTV.errorMessage(err);
+      if (err && err.code === 'network') {
+        message += ' If your provider works in a browser, add a CORS proxy under Advanced options.';
+      }
+      if (silent) {
+        finishBoot();
+        showLogin({ error: 'Could not reconnect: ' + message, account: App.account });
+      } else {
+        showLoginError(message);
+        var pass = $('#login-password');
+        if (pass) UI.focus(pass);
+      }
+      return false;
+    });
+  }
+
+  function connectSaved(id) {
+    var account = Store.accounts.find(function (a) { return a.id === id; });
+    if (!account) return;
+    connect({
+      name: account.name,
+      server: account.server,
+      username: account.username,
+      password: account.password,
+      proxy: account.proxy
+    }, false);
+  }
+
+  function loadCategories() {
+    var api = App.api;
+    if (!api) return Promise.resolve();
+    var liveP = api.getLiveCategories();
+    var vodP = api.getVodCategories();
+    var seriesP = api.getSeriesCategories();
+    return Promise.all([
+      liveP.catch(function () { return []; }),
+      vodP.catch(function () { return []; }),
+      seriesP.catch(function () { return []; })
+    ]).then(function (results) {
+      App.state.live.categories = results[0] || [];
+      App.state.vod.categories = results[1] || [];
+      App.state.series.categories = results[2] || [];
+    });
+  }
+
+  /* ---------------- View rendering ---------------- */
+
+  function renderView() {
+    if (!App.api || App.view === 'login') return;
+    var previous = selectorFor(document.activeElement);
+    var view = $('#view');
+    if (!view) return;
+    var html = '';
+    if (App.view === 'live') html = Screens.live(App.state.live, App.api);
+    else if (App.view === 'movies') html = Screens.movies(App.state.vod, App.api);
+    else if (App.view === 'series') html = Screens.series(App.state.series, App.api);
+    else if (App.view === 'favorites') html = Screens.favorites(App.state.favorites, App.api);
+    else if (App.view === 'search') html = Screens.search(App.state.search, App.api);
+    else if (App.view === 'settings') html = Screens.settings(App.state, App.api, VERSION);
+    view.innerHTML = html;
+    if (previous) focusInView(previous);
+  }
+
+  function switchView(view) {
+    if (Player.isOpen()) Player.close();
+    if (UI.isModalOpen()) UI.closeModal();
+    App.view = view;
+    updateChrome();
+
+    if (view === 'live' && App.state.live.loadedCategory !== App.state.live.categoryId && !App.state.live.items.length) {
+      App.state.live.loading = true;
+    }
+    if (view === 'movies' && App.state.vod.loadedCategory !== App.state.vod.categoryId && !App.state.vod.items.length) {
+      App.state.vod.loading = true;
+    }
+    if (view === 'series' && App.state.series.loadedCategory !== App.state.series.categoryId && !App.state.series.items.length) {
+      App.state.series.loading = true;
+    }
+
+    renderView();
+
+    if (view === 'live') return ensureLive();
+    if (view === 'movies') return ensureVod();
+    if (view === 'series') return ensureSeries();
+    if (view === 'favorites') { focusFavorites(); return Promise.resolve(); }
+    if (view === 'search') { setTimeout(function () { UI.focus($('#search-input')); }, 30); return Promise.resolve(); }
+    if (view === 'settings') { setTimeout(function () { UI.focusFirst($('#view')); }, 30); return Promise.resolve(); }
+    return Promise.resolve();
+  }
+
+  function focusLive() {
+    var card = $('#view [data-action="channel"]');
+    if (card) { UI.focus(card); return; }
+    focusFirstView();
+  }
+
+  function focusBrowse() {
+    var card = $('#view [data-action="vod-detail"], #view [data-action="series-detail"]');
+    if (card) { UI.focus(card); return; }
+    focusFirstView();
+  }
+
+  function focusFavorites() {
+    var card = $('#view .channel-card, #view .poster-card');
+    if (card) { UI.focus(card); return; }
+    var tab = $('#view [data-action="fav-tab"].is-active');
+    if (tab) { UI.focus(tab); return; }
+    focusFirstView();
+  }
+
+  /* ---------------- Live ---------------- */
+
+  function ensureLive() {
+    if (!App.api) return Promise.resolve();
+    var state = App.state.live;
+    if (state.loadedCategory !== state.categoryId) return loadLive(state.categoryId);
+    renderView();
+    focusLive();
+    return Promise.resolve();
+  }
+
+  function loadLive(categoryId, force) {
+    if (!App.api) return Promise.resolve();
+    var state = App.state.live;
+    if (!force && state.loadedCategory === categoryId) {
+      renderView();
+      focusLive();
+      return Promise.resolve();
+    }
+    state.categoryId = categoryId;
+    state.loading = true;
+    state.error = null;
+    state.items = [];
+    state.selectedId = null;
+    state.epg = null;
+    state.epgLoading = false;
+    state.limit = 120;
+    state.loadedCategory = null;
+    var token = ++state.token;
+    renderView();
+
+    return App.api.getLiveStreams(categoryId).then(function (items) {
+      if (token !== state.token) return;
+      state.items = items || [];
+      state.loading = false;
+      state.loadedCategory = categoryId;
+      renderView();
+      focusLive();
+    }).catch(function (err) {
+      if (token !== state.token) return;
+      state.loading = false;
+      state.items = [];
+      state.error = IPTV.errorMessage(err);
+      renderView();
+      setTimeout(focusFirstView, 20);
+    });
+  }
+
+  function selectChannel(id) {
+    if (App.view !== 'live') return;
+    id = String(id);
+    var state = App.state.live;
+    var changed = String(state.selectedId) !== id;
+    state.selectedId = id;
+    if (!changed) {
+      if (state.epgLoading) return;
+      if (Object.prototype.hasOwnProperty.call(App.cache.epg, id)) return;
+    }
+    var cached = App.cache.epg[id];
+    state.epg = cached || null;
+    state.epgLoading = cached === undefined;
+    renderPreview();
+    if (cached !== undefined) return;
+
+    var token = ++App.epgToken;
+    App.api.getShortEpg(id).then(function (list) {
+      App.cache.epg[id] = list || [];
+      if (token !== App.epgToken || String(state.selectedId) !== id) return;
+      state.epg = list || [];
+      state.epgLoading = false;
+      renderPreview();
+    }).catch(function () {
+      if (token !== App.epgToken || String(state.selectedId) !== id) return;
+      state.epg = [];
+      state.epgLoading = false;
+      renderPreview();
+    });
+  }
+
+  function renderPreview() {
+    var pane = $('#live-preview');
+    if (!pane) return;
+    var active = document.activeElement;
+    var restore = null;
+    if (active && pane.contains(active)) restore = selectorFor(active);
+    var item = App.state.live.items.find(function (i) {
+      return String(i.stream_id) === String(App.state.live.selectedId);
+    });
+    pane.innerHTML = Screens.preview(item, App.state.live, App.api);
+    if (restore) {
+      var target = pane.querySelector(restore);
+      if (target) UI.focus(target);
+    }
+  }
+
+  var selectChannelDebounced = IPTV.debounce(selectChannel, 160);
+
+  function allCatalog(type) {
+    return (App.cache.all && App.cache.all[type]) || [];
+  }
+
+  function liveItem(id) {
+    id = String(id);
+    return App.state.live.items.find(function (i) { return String(i.stream_id) === id; }) ||
+      Store.favorites.live[id] ||
+      allCatalog('live').find(function (i) { return String(i.stream_id) === id; }) || null;
+  }
+
+  function epgNowText(epg) {
+    var now = Date.now();
+    var program = (epg || []).find(function (p) { return p.start <= now && p.end > now; });
+    if (!program) return 'Live TV';
+    return program.title + '  ·  ' + IPTV.fmtTime(program.start, Store.settings.timeFormat) +
+      ' – ' + IPTV.fmtTime(program.end, Store.settings.timeFormat);
+  }
+
+  function playLive(id) {
+    var item = liveItem(id);
+    if (!item) return;
+    var key = String(item.stream_id);
+    var cached = App.cache.epg[key];
+    var epg = cached || (String(App.state.live.selectedId) === key ? App.state.live.epg : null) || [];
+
+    var format = Store.settings.streamFormat;
+    var allowed = (App.account && App.account.userInfo && App.account.userInfo.allowed_output_formats) || [];
+    if (Array.isArray(allowed) && allowed.length && allowed.indexOf(format) === -1) {
+      if (allowed.indexOf('m3u8') !== -1) format = 'm3u8';
+      else if (allowed.indexOf('ts') !== -1) format = 'ts';
+    }
+
+    var url = App.api.liveUrl(item, format);
+    Player.play({
+      type: 'live',
+      url: url,
+      title: item.name || 'Live TV',
+      subtitle: epgNowText(epg),
+      kicker: 'LIVE',
+      epg: epg,
+      onChannelUp: function () { zapChannel(item, -1); },
+      onChannelDown: function () { zapChannel(item, 1); },
+      onInfo: function () { openEpg(item.stream_id); },
+      onClose: function () { focusChannel(item.stream_id); }
+    });
+
+    // Start playback immediately; enrich the program info when EPG arrives.
+    if (cached === undefined) {
+      App.api.getShortEpg(item.stream_id).then(function (list) {
+        App.cache.epg[key] = list || [];
+        var current = Player.current();
+        if (current && current.url === url) Player.setEpg(list || []);
+      }).catch(function () { /* live playback does not depend on EPG */ });
+    }
+  }
+
+  function zapChannel(item, delta) {
+    var list = App.state.live.items;
+    if (!list.length) return;
+    var idx = list.findIndex(function (i) { return String(i.stream_id) === String(item.stream_id); });
+    if (idx < 0) return;
+    var next = list[(idx + delta + list.length) % list.length];
+    if (next) playLive(next.stream_id);
+  }
+
+  function focusChannel(id) {
+    var card = $('#view [data-action="channel"][data-id="' + id + '"]');
+    if (card) { UI.focus(card); return; }
+    focusFirstView();
+  }
+
+  function openEpg(id) {
+    var channel = liveItem(id);
+    if (!channel) return;
+    App.modalContext = null;
+    var token = ++App.modalToken;
+    var modalRef = UI.modal({
+      eyebrow: 'TV Guide',
+      title: channel.name || 'Channel',
+      wide: true,
+      body: '<div class="pane-state"><div class="spinner"></div><p>Loading the guide…</p></div>',
+      actions: [{ label: 'Close', value: 'close' }],
+      onAction: function (value) { if (value === 'close') UI.closeModal(); }
+    });
+
+    var guidePromise = App.api.getFullEpg(channel.stream_id).then(function (list) {
+      if (list && list.length) return list;
+      return App.api.getShortEpg(channel.stream_id, 24);
+    }).catch(function () {
+      return App.api.getShortEpg(channel.stream_id, 24);
+    });
+
+    guidePromise.then(function (list) {
+      if (token !== App.modalToken || !UI.currentModal || UI.currentModal !== modalRef) return;
+      var body = $('#modal-root .modal-body');
+      if (!body) return;
+      body.innerHTML = Screens.epgBody(channel, list || [], App.api);
+      var first = body.querySelector('[data-focusable]');
+      if (first) UI.focus(first);
+      else {
+        var close = $('#modal-root .modal-close');
+        if (close) UI.focus(close);
+      }
+    }).catch(function (err) {
+      if (token !== App.modalToken || !UI.currentModal || UI.currentModal !== modalRef) return;
+      var body = $('#modal-root .modal-body');
+      if (!body) return;
+      body.innerHTML = '<div class="empty-state">' + IPTV.icon('info') +
+        '<h3>Could not load the guide</h3><p>' + IPTV.esc(IPTV.errorMessage(err)) + '</p></div>';
+      var close = $('#modal-root .modal-close');
+      if (close) UI.focus(close);
+    });
+  }
+
+  function playCatchup(button) {
+    var id = button.getAttribute('data-id');
+    var start = Number(button.getAttribute('data-start'));
+    var duration = Number(button.getAttribute('data-duration')) || 60;
+    var channel = liveItem(id);
+    if (!channel) return;
+    var url = App.api.catchupUrl(id, start, duration);
+    UI.closeModal();
+    Player.play({
+      type: 'catchup',
+      url: url,
+      title: channel.name || 'Catch-up',
+      subtitle: 'Catch-up · ' + new Date(start).toLocaleString(),
+      kicker: 'CATCH-UP',
+      onClose: function () { focusChannel(id); }
+    });
+  }
+
+  /* ---------------- Movies ---------------- */
+
+  function ensureVod() {
+    if (!App.api) return Promise.resolve();
+    var state = App.state.vod;
+    if (state.loadedCategory !== state.categoryId) return loadVod(state.categoryId);
+    renderView();
+    focusBrowse();
+    return Promise.resolve();
+  }
+
+  function loadVod(categoryId, force) {
+    if (!App.api) return Promise.resolve();
+    var state = App.state.vod;
+    if (!force && state.loadedCategory === categoryId) {
+      renderView();
+      focusBrowse();
+      return Promise.resolve();
+    }
+    state.categoryId = categoryId;
+    state.loading = true;
+    state.error = null;
+    state.items = [];
+    state.limit = 120;
+    state.loadedCategory = null;
+    var token = ++state.token;
+    renderView();
+
+    return App.api.getVodStreams(categoryId).then(function (items) {
+      if (token !== state.token) return;
+      state.items = items || [];
+      state.loading = false;
+      state.loadedCategory = categoryId;
+      renderView();
+      focusBrowse();
+    }).catch(function (err) {
+      if (token !== state.token) return;
+      state.loading = false;
+      state.error = IPTV.errorMessage(err);
+      renderView();
+      setTimeout(focusFirstView, 20);
+    });
+  }
+
+  function vodItem(id) {
+    id = String(id);
+    return App.state.vod.items.find(function (i) { return String(i.stream_id) === id; }) ||
+      Store.favorites.vod[id] ||
+      allCatalog('vod').find(function (i) { return String(i.stream_id) === id; }) || null;
+  }
+
+  function openVod(item) {
+    if (!item) return;
+    var id = String(item.stream_id);
+    var cached = App.cache.vodInfo[id];
+    var show = function (data) {
+      App.cache.vodInfo[id] = data;
+      var info = data.info || {};
+      var title = info.name || item.name || 'Movie';
+      App.modalContext = { type: 'vod', item: item, data: data };
+      UI.modal({
+        eyebrow: 'Movie',
+        title: title,
+        wide: true,
+        body: Screens.vodDetail(data, item, App.api, Store.isFavorite('vod', id)),
+        actions: [{ label: 'Close', value: 'close' }],
+        autofocusSelector: '[data-action="play-vod"]',
+        onAction: function (value) { if (value === 'close') UI.closeModal(); },
+        onClose: function () { App.modalContext = null; }
+      });
+    };
+    if (cached) { show(cached); return; }
+    UI.loading(true, 'Loading movie details…');
+    App.api.getVodInfo(id).then(function (data) {
+      UI.loading(false);
+      show(data);
+    }).catch(function (err) {
+      UI.loading(false);
+      UI.toast('Could not load movie details: ' + IPTV.errorMessage(err));
+    });
+  }
+
+  function playVod(item, data) {
+    data = data || {};
+    var movie = data.movie_data || {};
+    var info = data.info || {};
+    var id = String(movie.stream_id || item.stream_id);
+    var ext = movie.container_extension || item.container_extension || 'mp4';
+    var url = App.api.vodUrl({ stream_id: id, container_extension: ext });
+    var title = info.name || item.name || 'Movie';
+    var history = Store.getHistory('vod', id);
+    var startAt = 0;
+    if (history && history.position > 5 && (!history.duration || history.position < history.duration - 10)) {
+      startAt = history.position;
+    }
+    UI.closeModal();
+    Player.play({
+      type: 'vod',
+      url: url,
+      title: title,
+      subtitle: [info.releasedate || info.releaseDate, info.genre, info.duration].filter(Boolean).join('  ·  '),
+      kicker: 'MOVIE',
+      startAt: startAt,
+      onProgress: function (position, duration) {
+        Store.setHistory('vod', id, {
+          position: position,
+          duration: duration,
+          name: title,
+          stream_id: id,
+          container_extension: ext,
+          stream_icon: info.movie_image || item.stream_icon || ''
+        });
+      },
+      onClose: function () { focusVod(id); }
+    });
+  }
+
+  function focusVod(id) {
+    var card = $('#view [data-action="vod-detail"][data-id="' + id + '"]');
+    if (card) { UI.focus(card); return; }
+    focusFirstView();
+  }
+
+  /* ---------------- Series ---------------- */
+
+  function ensureSeries() {
+    if (!App.api) return Promise.resolve();
+    var state = App.state.series;
+    if (state.loadedCategory !== state.categoryId) return loadSeries(state.categoryId);
+    renderView();
+    focusBrowse();
+    return Promise.resolve();
+  }
+
+  function loadSeries(categoryId, force) {
+    if (!App.api) return Promise.resolve();
+    var state = App.state.series;
+    if (!force && state.loadedCategory === categoryId) {
+      renderView();
+      focusBrowse();
+      return Promise.resolve();
+    }
+    state.categoryId = categoryId;
+    state.loading = true;
+    state.error = null;
+    state.items = [];
+    state.limit = 120;
+    state.loadedCategory = null;
+    var token = ++state.token;
+    renderView();
+
+    return App.api.getSeries(categoryId).then(function (items) {
+      if (token !== state.token) return;
+      state.items = items || [];
+      state.loading = false;
+      state.loadedCategory = categoryId;
+      renderView();
+      focusBrowse();
+    }).catch(function (err) {
+      if (token !== state.token) return;
+      state.loading = false;
+      state.error = IPTV.errorMessage(err);
+      renderView();
+      setTimeout(focusFirstView, 20);
+    });
+  }
+
+  function seriesItem(id) {
+    id = String(id);
+    return App.state.series.items.find(function (i) { return String(i.series_id) === id; }) ||
+      Store.favorites.series[id] ||
+      allCatalog('series').find(function (i) { return String(i.series_id) === id; }) || null;
+  }
+
+  function openSeries(item, season, focusEpisodes) {
+    if (!item) return;
+    var id = String(item.series_id);
+    var cached = App.cache.seriesInfo[id];
+    var show = function (data) {
+      App.cache.seriesInfo[id] = data;
+      var previousContext = App.modalContext;
+      var chosenSeason = season ||
+        (previousContext && previousContext.type === 'series' && previousContext.season) || 1;
+      App.modalContext = {
+        type: 'series',
+        item: item,
+        data: data,
+        season: String(chosenSeason)
+      };
+      showSeriesModal(focusEpisodes);
+    };
+    if (cached) { show(cached); return; }
+    UI.loading(true, 'Loading series details…');
+    App.api.getSeriesInfo(id).then(function (data) {
+      UI.loading(false);
+      show(data);
+    }).catch(function (err) {
+      UI.loading(false);
+      UI.toast('Could not load series details: ' + IPTV.errorMessage(err));
+    });
+  }
+
+  function showSeriesModal(focusEpisodes) {
+    var ctx = App.modalContext;
+    if (!ctx || ctx.type !== 'series') return;
+    var item = ctx.item;
+    var data = ctx.data;
+    var info = data.info || {};
+    var title = info.name || item.name || 'Series';
+    var favorite = Store.isFavorite('series', item.series_id);
+    var body = Screens.seriesDetail(data, item, App.api, favorite, ctx.season);
+    UI.modal({
+      eyebrow: 'Series',
+      title: title,
+      wide: true,
+      body: body,
+      actions: [{ label: 'Close', value: 'close' }],
+      autofocusSelector: focusEpisodes ? '#episode-list [data-focusable]' : '[data-action="season"].is-active',
+      onAction: function (value) { if (value === 'close') UI.closeModal(); },
+      onClose: function () { App.modalContext = null; }
+    });
+  }
+
+  function seasonEpisodes(data, season) {
+    var list = (data.episodes || {})[String(season)];
+    return Array.isArray(list) ? list : [];
+  }
+
+  function findNextEpisode(data, season, episodeId) {
+    var currentSeason = String(season);
+    var list = seasonEpisodes(data, currentSeason);
+    var index = list.findIndex(function (ep) { return String(ep.id) === String(episodeId); });
+    if (index >= 0 && index < list.length - 1) {
+      return { season: currentSeason, episode: list[index + 1] };
+    }
+    var seasons = Object.keys(data.episodes || {}).sort(function (a, b) { return Number(a) - Number(b); });
+    var seasonIndex = seasons.indexOf(currentSeason);
+    for (var i = seasonIndex + 1; i < seasons.length; i++) {
+      var nextList = seasonEpisodes(data, seasons[i]);
+      if (nextList.length) return { season: seasons[i], episode: nextList[0] };
+    }
+    return null;
+  }
+
+  function playSeriesEpisode(item, data, season, episode) {
+    if (!episode) return;
+    var id = String(episode.id || episode.stream_id);
+    var ext = episode.container_extension || 'mp4';
+    var url = App.api.seriesUrl({ id: id, container_extension: ext });
+    var info = data.info || {};
+    var seriesTitle = info.name || item.name || 'Series';
+    var epNum = episode.episode_num || episode.episode || '';
+    var epTitle = episode.title || ('Episode ' + epNum);
+    var history = Store.getHistory('series', item.series_id + ':' + id);
+    var startAt = 0;
+    if (history && history.position > 5 && (!history.duration || history.position < history.duration - 10)) {
+      startAt = history.position;
+    }
+    var next = findNextEpisode(data, season, id);
+    var nextNum = next ? (next.episode.episode_num || next.episode.episode || '') : '';
+
+    Player.play({
+      type: 'series',
+      url: url,
+      title: seriesTitle,
+      subtitle: 'S' + season + ' E' + epNum + '  ·  ' + epTitle,
+      kicker: 'EPISODE',
+      startAt: startAt,
+      next: next ? function () {
+        playSeriesEpisode(item, data, next.season, next.episode);
+      } : null,
+      nextTitle: next ? ('S' + next.season + ' E' + nextNum + '  ·  ' +
+        (next.episode.title || 'Next episode')) : '',
+      onProgress: function (position, duration) {
+        Store.setHistory('series', item.series_id + ':' + id, {
+          position: position,
+          duration: duration,
+          seriesId: item.series_id,
+          seriesName: seriesTitle,
+          episodeId: id,
+          season: season,
+          episode: epNum,
+          title: epTitle,
+          container_extension: ext,
+          cover: info.cover || item.cover || ''
+        });
+      },
+      onClose: function () { focusSeries(item.series_id); }
+    });
+  }
+
+  function focusSeries(id) {
+    var card = $('#view [data-action="series-detail"][data-id="' + id + '"]');
+    if (card) { UI.focus(card); return; }
+    focusFirstView();
+  }
+
+  /* ---------------- Favorites ---------------- */
+
+  function getItem(type, id) {
+    id = String(id);
+    if (type === 'live') return liveItem(id);
+    if (type === 'vod') return vodItem(id);
+    if (type === 'series') return seriesItem(id);
+    return null;
+  }
+
+  function toggleFav(type, id) {
+    var item = getItem(type, id);
+    if (!item) { UI.toast('Could not find that item.'); return; }
+    var added = Store.toggleFavorite(type, item);
+    UI.toast(added ? 'Added to favorites' : 'Removed from favorites');
+
+    if (UI.isModalOpen()) {
+      $$('#modal-root [data-action="toggle-fav"]').forEach(function (btn) {
+        if (btn.getAttribute('data-type') !== type || btn.getAttribute('data-id') !== String(id)) return;
+        btn.innerHTML = IPTV.icon(added ? 'heart-fill' : 'heart') +
+          (added ? 'Remove favorite' : 'Add to favorites');
+      });
+      return;
+    }
+
+    if (App.view === 'live') {
+      renderView();
+      renderPreview();
+      return;
+    }
+    if (App.view === 'favorites' || App.view === 'movies' || App.view === 'series') {
+      renderView();
+      if (App.view === 'favorites') focusFavorites();
+      return;
+    }
+  }
+
+  /* ---------------- Search ---------------- */
+
+  function ensureAllCatalogs() {
+    if (App.cache.all) return Promise.resolve(App.cache.all);
+    if (!App.api) return Promise.resolve({ live: [], vod: [], series: [] });
+    UI.loading(true, 'Loading your full catalog…');
+    return Promise.all([
+      App.api.getAllLiveStreams().catch(function () { return []; }),
+      App.api.getAllVodStreams().catch(function () { return []; }),
+      App.api.getAllSeries().catch(function () { return []; })
+    ]).then(function (results) {
+      App.cache.all = { live: results[0] || [], vod: results[1] || [], series: results[2] || [] };
+      UI.loading(false);
+      return App.cache.all;
+    }).catch(function (err) {
+      UI.loading(false);
+      throw err;
+    });
+  }
+
+  function filterList(list, query, limit) {
+    var q = query.toLowerCase();
+    return (list || []).filter(function (item) {
+      return String(item.name || '').toLowerCase().indexOf(q) !== -1;
+    }).slice(0, limit || 60);
+  }
+
+  function doSearch() {
+    var input = $('#search-input');
+    var query = input ? input.value.trim() : App.state.search.query;
+    if (!query) {
+      UI.toast('Type something to search for.');
+      if (input) UI.focus(input);
+      return;
+    }
+    var state = App.state.search;
+    state.query = query;
+    state.loading = true;
+    state.error = null;
+    state.results = { live: [], vod: [], series: [] };
+    var token = ++state.token;
+    renderView();
+    setTimeout(function () { UI.focus($('#search-input')); }, 20);
+
+    ensureAllCatalogs().then(function (all) {
+      if (token !== state.token) return;
+      state.results = {
+        live: filterList(all.live, query, 60),
+        vod: filterList(all.vod, query, 60),
+        series: filterList(all.series, query, 60)
+      };
+      state.loading = false;
+      renderView();
+      var first = $('#search-results [data-focusable]');
+      if (first) UI.focus(first);
+      else {
+        var again = $('#search-input');
+        if (again) UI.focus(again);
+      }
+    }).catch(function (err) {
+      if (token !== state.token) return;
+      state.loading = false;
+      state.error = 'Could not search your catalog. ' + IPTV.errorMessage(err);
+      renderView();
+      setTimeout(function () { UI.focus($('#search-input')); }, 20);
+    });
+  }
+
+  /* ---------------- Settings actions ---------------- */
+
+  function setSetting(setting, value) {
+    if (!(setting in Store.settings)) return;
+    Store.settings[setting] = value;
+    Store.saveSettings();
+    renderView();
+    var target = $('#view [data-action="setting"][data-setting="' + setting + '"][data-value="' + value + '"]');
+    if (target) UI.focus(target);
+    if (setting === 'timeFormat') {
+      updateClock();
+      if (App.view === 'live') renderPreview();
+    }
+  }
+
+  function refreshAll() {
+    UI.confirm('Refresh catalog', 'Reload all categories and content from your provider?', 'Refresh').then(function (yes) {
+      if (!yes || !App.api) return;
+      UI.loading(true, 'Refreshing your catalog…');
+      App.api.clearCache();
+      App.cache = { epg: {}, vodInfo: {}, seriesInfo: {}, all: null };
+      App.modalContext = null;
+      App.state.live = freshLive();
+      App.state.vod = freshVod();
+      App.state.series = freshVod();
+      var current = App.view === 'settings' ? 'live' : App.view;
+      loadCategories().then(function () {
+        UI.loading(false);
+        UI.toast('Catalog refreshed');
+        return switchView(current);
+      }).catch(function (err) {
+        UI.loading(false);
+        UI.toast('Refresh failed: ' + IPTV.errorMessage(err));
+      });
+    });
+  }
+
+  function clearHistory() {
+    UI.confirm('Clear resume history', 'Remove all saved playback positions? Favorites are kept.', 'Clear', true).then(function (yes) {
+      if (!yes) return;
+      Store.clearHistory();
+      UI.toast('Resume history cleared');
+    });
+  }
+
+  function logout() {
+    UI.confirm('Sign out', 'Disconnect this account from the TV? Your saved login stays on this TV.', 'Sign out', true).then(function (yes) {
+      if (!yes) return;
+      Player.close();
+      UI.closeModal();
+      Store.activeId = null;
+      Store.saveActive();
+      App.api = null;
+      App.account = null;
+      App.state.live = freshLive();
+      App.state.vod = freshVod();
+      App.state.series = freshVod();
+      App.cache = { epg: {}, vodInfo: {}, seriesInfo: {}, all: null };
+      showLogin({ clear: true });
+    });
+  }
+
+  function deleteAccount(id) {
+    var account = Store.accounts.find(function (a) { return a.id === id; });
+    if (!account) return;
+    UI.confirm('Delete account', 'Remove “' + (account.name || account.username) + '” from this TV?', 'Delete', true).then(function (yes) {
+      if (!yes) return;
+      Store.removeAccount(id);
+      if (App.account && App.account.id === id) {
+        App.account = null;
+        App.api = null;
+      }
+      renderSavedAccounts();
+      fillLoginForm(Store.activeAccount(), !Store.activeAccount());
+      UI.toast('Account removed');
+    });
+  }
+
+  function back() {
+    if (UI.isModalOpen()) { UI.closeModal(); return; }
+    if (Player.isOpen()) { Player.close(); return; }
+    if (loginVisible()) {
+      if (App.api) {
+        $('#login-screen').classList.add('hidden');
+        $('#shell').classList.remove('hidden');
+        switchView('settings');
+        return;
+      }
+      if (App.exitArmed) { App.exitArmed = false; exitApp(); return; }
+      App.exitArmed = true;
+      UI.toast('Press Back again to exit');
+      setTimeout(function () { App.exitArmed = false; }, 2600);
+      return;
+    }
+    if (App.view !== 'live') { switchView('live'); return; }
+    if (App.exitArmed) { App.exitArmed = false; exitApp(); return; }
+    App.exitArmed = true;
+    UI.toast('Press Back again to exit');
+    setTimeout(function () { App.exitArmed = false; }, 2600);
+  }
+
+  function exitApp() {
+    try {
+      if (window.tizen && tizen.application) {
+        tizen.application.getCurrentApplication().exit();
+        return;
+      }
+    } catch (err) { /* ignore */ }
+    try { window.close(); } catch (err) { /* ignore */ }
+  }
+
+  /* ---------------- Event bindings ---------------- */
+
+  function bindEvents() {
+    $('#nav').addEventListener('click', function (e) {
+      var btn = e.target.closest('[data-view]');
+      if (btn) switchView(btn.getAttribute('data-view'));
+    });
+
+    $('#login-form').addEventListener('submit', handleLoginSubmit);
+
+    $('#saved-list').addEventListener('click', function (e) {
+      var del = e.target.closest('[data-delete-account]');
+      if (del) {
+        e.stopPropagation();
+        deleteAccount(del.getAttribute('data-delete-account'));
+        return;
+      }
+      var item = e.target.closest('[data-account-id]');
+      if (item) connectSaved(item.getAttribute('data-account-id'));
+    });
+
+    document.addEventListener('click', function (e) {
+      if (e.target.closest('#modal-root')) return;
+      var actionEl = e.target.closest('[data-action]');
+      if (!actionEl) return;
+      var action = actionEl.getAttribute('data-action');
+
+      if (action === 'open-search') { switchView('search'); return; }
+      if (action === 'account-menu') { switchView('settings'); return; }
+
+      if (action === 'category') {
+        var category = actionEl.getAttribute('data-category');
+        if (App.view === 'live') {
+          App.state.live.categoryId = category;
+          App.state.live.loadedCategory = null;
+          App.state.live.selectedId = null;
+          loadLive(category);
+        } else if (App.view === 'movies') {
+          App.state.vod.categoryId = category;
+          App.state.vod.loadedCategory = null;
+          loadVod(category);
+        } else if (App.view === 'series') {
+          App.state.series.categoryId = category;
+          App.state.series.loadedCategory = null;
+          loadSeries(category);
+        }
+        return;
+      }
+
+      if (action === 'channel' || action === 'play-live') {
+        playLive(actionEl.getAttribute('data-id'));
+        return;
+      }
+      if (action === 'open-epg') { openEpg(actionEl.getAttribute('data-id')); return; }
+      if (action === 'toggle-fav') {
+        toggleFav(actionEl.getAttribute('data-type'), actionEl.getAttribute('data-id'));
+        return;
+      }
+      if (action === 'vod-detail') {
+        openVod(vodItem(actionEl.getAttribute('data-id')));
+        return;
+      }
+      if (action === 'series-detail') {
+        openSeries(seriesItem(actionEl.getAttribute('data-id')));
+        return;
+      }
+      if (action === 'fav-tab') {
+        App.state.favorites.tab = actionEl.getAttribute('data-tab');
+        renderView();
+        focusFavorites();
+        return;
+      }
+      if (action === 'do-search') { doSearch(); return; }
+      if (action === 'load-more') {
+        var state = App.view === 'live' ? App.state.live : (App.view === 'movies' ? App.state.vod : (App.view === 'series' ? App.state.series : null));
+        if (!state) return;
+        var oldLimit = state.limit || 120;
+        state.limit = oldLimit + 120;
+        renderView();
+        var next = $('#view [data-index="' + oldLimit + '"]');
+        if (next) UI.focus(next);
+        return;
+      }
+      if (action === 'retry') {
+        if (App.view === 'live') loadLive(App.state.live.categoryId, true);
+        else if (App.view === 'movies') loadVod(App.state.vod.categoryId, true);
+        else if (App.view === 'series') loadSeries(App.state.series.categoryId, true);
+        else if (App.view === 'search') doSearch();
+        return;
+      }
+      if (action === 'setting') {
+        setSetting(actionEl.getAttribute('data-setting'), actionEl.getAttribute('data-value'));
+        return;
+      }
+      if (action === 'refresh-all') { refreshAll(); return; }
+      if (action === 'clear-history') { clearHistory(); return; }
+      if (action === 'switch-account') { showLogin(); return; }
+      if (action === 'add-account') { showLogin({ clear: true }); return; }
+      if (action === 'logout') { logout(); return; }
+    });
+
+    // Actions inside modals: seasons, episodes, play, favorite, catch-up.
+    $('#modal-root').addEventListener('click', function (e) {
+      var actionEl = e.target.closest('[data-action]');
+      if (!actionEl) return;
+      var action = actionEl.getAttribute('data-action');
+      if (action === 'play-vod') {
+        var ctx = App.modalContext;
+        if (ctx && ctx.type === 'vod') playVod(ctx.item, ctx.data);
+        return;
+      }
+      if (action === 'toggle-fav') {
+        toggleFav(actionEl.getAttribute('data-type'), actionEl.getAttribute('data-id'));
+        return;
+      }
+      if (action === 'season') {
+        if (!App.modalContext || App.modalContext.type !== 'series') return;
+        App.modalContext.season = actionEl.getAttribute('data-season');
+        showSeriesModal(true);
+        return;
+      }
+      if (action === 'play-episode') {
+        if (!App.modalContext || App.modalContext.type !== 'series') return;
+        var ctx2 = App.modalContext;
+        var season = actionEl.getAttribute('data-season');
+        var epId = actionEl.getAttribute('data-id');
+        var list = seasonEpisodes(ctx2.data, season);
+        var episode = list.find(function (ep) { return String(ep.id) === String(epId); });
+        if (!episode) return;
+        UI.closeModal();
+        playSeriesEpisode(ctx2.item, ctx2.data, season, episode);
+        return;
+      }
+      if (action === 'catchup') {
+        playCatchup(actionEl);
+        return;
+      }
+    });
+
+    document.addEventListener('focusin', function (e) {
+      var card = e.target.closest('[data-action="channel"]');
+      if (!card || App.view !== 'live') return;
+      selectChannelDebounced(card.getAttribute('data-id'));
+    });
+
+    $('#view').addEventListener('keydown', function (e) {
+      if (e.target && e.target.id === 'search-input' && (e.keyCode === 13 || e.key === 'Enter')) {
+        // Empty + Enter should let the TV open its on-screen keyboard.
+        if (e.target.value && e.target.value.trim()) {
+          e.preventDefault();
+          doSearch();
+        }
+      }
+    });
+
+    // Player keys must win over spatial navigation.
+    document.addEventListener('keydown', function (e) {
+      if (Player.isOpen() && !UI.isModalOpen()) {
+        if (Player.handleKey(e)) { e.stopPropagation(); }
+        return;
+      }
+      if (!Player.isOpen() && !UI.isModalOpen() && e.keyCode === 457 && App.view === 'live') {
+        var selected = App.state.live.selectedId;
+        if (selected) { e.preventDefault(); openEpg(selected); }
+      }
+    }, true);
+
+    window.addEventListener('online', function () { updateConnection(); UI.toast('Back online'); });
+    window.addEventListener('offline', function () { updateConnection(); UI.toast('Network connection lost'); });
+    window.addEventListener('beforeunload', function () { if (Player.isOpen()) Player.close(); });
+  }
+
+  /* ---------------- Boot ---------------- */
+
+  function boot() {
+    Store.load();
+    UI.init();
+    Player.init();
+    UI.onBack = back;
+    bindEvents();
+    updateClock();
+    setInterval(updateClock, 15000);
+    updateConnection();
+    updateAccountChip();
+
+    var account = Store.activeAccount();
+    if (!account) {
+      finishBoot();
+      showLogin();
+      bootText('Welcome');
+      return;
+    }
+    bootText('Reconnecting to ' + (account.name || account.username) + '…');
+    connect({
+      name: account.name,
+      server: account.server,
+      username: account.username,
+      password: account.password,
+      proxy: account.proxy
+    }, true);
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', boot);
+  } else {
+    boot();
+  }
+})();

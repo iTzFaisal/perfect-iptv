@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=1920, height=1080, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#070a10">
+  <link rel="icon" href="icon.png">
+  <title>Perfect IPTV</title>
+  <link rel="stylesheet" href="css/app.css">
+  <script src="$WEBAPIS/webapis/webapis.js"></script>
+</head>
+<body>
+  <svg class="svg-sprite" aria-hidden="true" focusable="false">
+    <symbol id="i-live" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="m17 2-5 5-5-5"/><path d="M8 13h2l1.5 3 2-6L15 13h2"/></symbol>
+    <symbol id="i-movies" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="18" rx="2"/><path d="M7 3v18M17 3v18M2 9h5M2 15h5M17 9h5M17 15h5"/></symbol>
+    <symbol id="i-series" viewBox="0 0 24 24"><path d="m12 2 9 5-9 5-9-5 9-5Z"/><path d="m3 12 9 5 9-5"/><path d="m3 17 9 5 9-5"/></symbol>
+    <symbol id="i-heart" viewBox="0 0 24 24"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8l1.1 1.1L12 21l7.8-7.5 1.1-1.1a5.5 5.5 0 0 0-.1-7.8Z"/></symbol>
+    <symbol id="i-heart-fill" viewBox="0 0 24 24"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8l1.1 1.1L12 21l7.8-7.5 1.1-1.1a5.5 5.5 0 0 0-.1-7.8Z" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4.5v15l13-7.5-13-7.5Z" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16" rx="1" fill="currentColor" stroke="none"/><rect x="14" y="4" width="4" height="16" rx="1" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="i-back" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
+    <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 16v-5M12 8h.01"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 3v6h-6"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v5M14 11v5"/></symbol>
+    <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></symbol>
+    <symbol id="i-server" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01M7 16.5h.01"/></symbol>
+    <symbol id="i-wifi" viewBox="0 0 24 24"><path d="M5 12.5a10 10 0 0 1 14 0M8.5 16a5.5 5.5 0 0 1 7 0M12 19.5h.01"/></symbol>
+    <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 11h18"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 5 5L20 7"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+    <symbol id="i-skip-back" viewBox="0 0 24 24"><path d="M11 19V5l-8 7 8 7ZM21 19V5l-8 7 8 7Z" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="i-skip-fwd" viewBox="0 0 24 24"><path d="M13 5v14l8-7-8-7ZM3 5v14l8-7-8-7Z" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="i-chevron-right" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+    <symbol id="i-chevron-left" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
+    <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></symbol>
+    <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.5.5l2-2a5 5 0 0 0-7-7l-1.2 1.2"/><path d="M14 11a5 5 0 0 0-7.5-.5l-2 2a5 5 0 0 0 7 7l1.2-1.2"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3 4 6v6c0 5 3.4 8.3 8 9 4.6-.7 8-4 8-9V6l-8-3Z"/><path d="m9 12 2 2 4-4"/></symbol>
+    <symbol id="i-tv" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="14" rx="2"/><path d="M8 22h8M12 18v4"/></symbol>
+    <symbol id="i-arrow-left" viewBox="0 0 24 24"><path d="M19 12H5M12 19l-7-7 7-7"/></symbol>
+  </svg>
+
+  <div id="app">
+    <section id="boot-screen" class="boot-screen">
+      <div class="boot-logo">
+        <span class="logo-mark"><svg class="icon"><use href="#i-play"/></svg></span>
+        <div class="boot-name">Perfect<span>IPTV</span></div>
+      </div>
+      <div class="boot-spinner"></div>
+      <p class="boot-text" id="boot-text">Starting your TV…</p>
+    </section>
+
+    <section id="login-screen" class="login-screen hidden">
+      <div class="login-glow glow-a"></div>
+      <div class="login-glow glow-b"></div>
+      <div class="login-card">
+        <div class="login-art">
+          <div class="brand brand-xl">
+            <span class="logo-mark"><svg class="icon"><use href="#i-play"/></svg></span>
+            <div class="brand-name">Perfect<span>IPTV</span></div>
+          </div>
+          <h1>Your TV,<br><em>perfected.</em></h1>
+          <p class="login-lead">One beautiful place for every channel, movie, and series your provider offers — built for the Samsung remote.</p>
+          <ul class="login-features">
+            <li><svg class="icon"><use href="#i-live"/></svg><span>Live TV with EPG</span></li>
+            <li><svg class="icon"><use href="#i-movies"/></svg><span>Movies &amp; series</span></li>
+            <li><svg class="icon"><use href="#i-clock"/></svg><span>Resume where you left off</span></li>
+          </ul>
+        </div>
+        <div class="login-form-wrap">
+          <div class="login-form-head">
+            <span class="eyebrow">Xtream Codes API</span>
+            <h2>Connect your provider</h2>
+            <p>Enter the details from your IPTV welcome email.</p>
+          </div>
+          <form id="login-form" novalidate autocomplete="off">
+            <label class="field">
+              <span>Account name <em>optional</em></span>
+              <input id="login-name" type="text" maxlength="40" placeholder="My IPTV" autocomplete="off" data-focusable>
+            </label>
+            <label class="field">
+              <span>Server URL</span>
+              <input id="login-server" type="text" inputmode="url" placeholder="http://your-server.com:8080" autocomplete="off" spellcheck="false" required data-focusable>
+            </label>
+            <div class="field-row">
+              <label class="field">
+                <span>Username</span>
+                <input id="login-username" type="text" autocomplete="off" spellcheck="false" required data-focusable>
+              </label>
+              <label class="field">
+                <span>Password</span>
+                <input id="login-password" type="password" autocomplete="off" required data-focusable>
+              </label>
+            </div>
+            <details class="advanced">
+              <summary data-focusable>Advanced options</summary>
+              <label class="field">
+                <span>CORS proxy URL <em>optional</em></span>
+                <input id="login-proxy" type="text" inputmode="url" placeholder="https://your-proxy.workers.dev" autocomplete="off" spellcheck="false" data-focusable>
+              </label>
+              <p class="hint">Only needed if your provider blocks API requests from TV apps. The README includes a one-file proxy you can deploy for free.</p>
+            </details>
+            <div id="login-error" class="form-error hidden" role="alert"></div>
+            <button type="submit" id="login-submit" class="btn btn-primary btn-lg" data-focusable>
+              <span class="btn-label">Connect</span>
+              <span class="btn-spinner hidden"></span>
+            </button>
+          </form>
+          <div id="saved-accounts" class="saved-accounts hidden">
+            <div class="saved-head"><span>Saved accounts</span><span class="saved-hint">Select to reconnect</span></div>
+            <div id="saved-list" class="saved-list"></div>
+          </div>
+          <p class="legal">Perfect IPTV is a media player only. It does not provide, host, or sell any channels or content. Use it with a subscription you own.</p>
+        </div>
+      </div>
+    </section>
+
+    <div id="shell" class="shell hidden">
+      <aside class="sidebar">
+        <div class="brand">
+          <span class="logo-mark"><svg class="icon"><use href="#i-play"/></svg></span>
+          <div class="brand-name">Perfect<span>IPTV</span></div>
+        </div>
+        <nav id="nav" class="nav" aria-label="Main navigation">
+          <button class="nav-item is-active" data-view="live" data-focusable>
+            <svg class="icon"><use href="#i-live"/></svg><span>Live TV</span>
+          </button>
+          <button class="nav-item" data-view="movies" data-focusable>
+            <svg class="icon"><use href="#i-movies"/></svg><span>Movies</span>
+          </button>
+          <button class="nav-item" data-view="series" data-focusable>
+            <svg class="icon"><use href="#i-series"/></svg><span>Series</span>
+          </button>
+          <button class="nav-item" data-view="favorites" data-focusable>
+            <svg class="icon"><use href="#i-heart"/></svg><span>Favorites</span>
+          </button>
+          <button class="nav-item" data-view="search" data-focusable>
+            <svg class="icon"><use href="#i-search"/></svg><span>Search</span>
+          </button>
+          <button class="nav-item" data-view="settings" data-focusable>
+            <svg class="icon"><use href="#i-settings"/></svg><span>Settings</span>
+          </button>
+        </nav>
+        <div class="sidebar-foot">
+          <button class="account-chip" data-action="account-menu" data-focusable>
+            <span class="avatar" id="account-avatar">P</span>
+            <span class="account-meta"><strong id="account-name">Account</strong><small id="account-server">—</small></span>
+            <svg class="icon"><use href="#i-chevron-right"/></svg>
+          </button>
+          <div class="sidebar-status"><span class="status-dot"></span><span id="connection-label">Connected</span></div>
+        </div>
+      </aside>
+      <main class="main">
+        <header class="topbar">
+          <div class="topbar-title">
+            <span class="eyebrow" id="view-eyebrow">Browse</span>
+            <h1 id="view-title">Live TV</h1>
+          </div>
+          <div class="topbar-right">
+            <div class="clock" id="clock">--:--</div>
+            <button class="icon-btn" data-action="open-search" data-focusable aria-label="Search">
+              <svg class="icon"><use href="#i-search"/></svg>
+            </button>
+          </div>
+        </header>
+        <section id="view" class="view" aria-live="polite"></section>
+      </main>
+    </div>
+
+    <div id="player" class="player hidden" aria-hidden="true">
+      <object id="av-player" class="av-player" type="application/avplayer"></object>
+      <video id="html5-video" class="html5-video" playsinline></video>
+      <div id="player-ui" class="player-ui">
+        <div class="player-gradient top"></div>
+        <div class="player-gradient bottom"></div>
+        <div class="player-top">
+          <div class="player-meta">
+            <span class="player-kicker" id="player-kicker">LIVE</span>
+            <h2 id="player-title">—</h2>
+            <p id="player-subtitle"></p>
+          </div>
+          <button class="icon-btn player-close" data-player="close" data-focusable aria-label="Stop">
+            <svg class="icon"><use href="#i-x"/></svg>
+          </button>
+        </div>
+        <div class="player-center">
+          <button class="round-btn" data-player="back10" data-focusable aria-label="Back 10 seconds">
+            <svg class="icon"><use href="#i-skip-back"/></svg><span class="seek-label">10</span>
+          </button>
+          <button class="round-btn big" data-player="toggle" data-focusable aria-label="Play or pause">
+            <svg class="icon" id="player-toggle-icon"><use href="#i-pause"/></svg>
+          </button>
+          <button class="round-btn" data-player="fwd10" data-focusable aria-label="Forward 10 seconds">
+            <svg class="icon"><use href="#i-skip-fwd"/></svg><span class="seek-label">10</span>
+          </button>
+        </div>
+        <div class="player-bottom">
+          <div class="progress-wrap" id="player-progress-wrap">
+            <div class="progress"><div class="progress-fill" id="player-progress"></div></div>
+            <div class="times"><span id="player-time">00:00</span><span id="player-duration">Live</span></div>
+          </div>
+          <div class="player-hint" id="player-hint">Use ← → to seek · Back to stop</div>
+        </div>
+        <div id="player-buffering" class="buffering hidden">
+          <div class="spinner"></div><span>Buffering…</span>
+        </div>
+        <div id="player-error" class="player-error hidden">
+          <div class="error-icon"><svg class="icon"><use href="#i-info"/></svg></div>
+          <h3>Playback failed</h3>
+          <p id="player-error-text">This stream could not be played.</p>
+          <div class="error-actions">
+            <button class="btn btn-primary" data-player="retry" data-focusable>Try again</button>
+            <button class="btn btn-ghost" data-player="close" data-focusable>Close</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="loading-overlay" class="loading-overlay hidden">
+      <div class="spinner"></div>
+      <p id="loading-text">Loading…</p>
+    </div>
+
+    <div id="modal-root" class="modal-root hidden" role="dialog" aria-modal="true"></div>
+    <div id="toast" class="toast" role="status"></div>
+  </div>
+
+  <script src="vendor/hls.min.js"></script>
+  <script src="js/core.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/player.js"></script>
+  <script src="js/screens.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

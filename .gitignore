@@ -1,0 +1,9 @@
+node_modules/
+screenshots/
+dist/
+*.wgt
+*.wgt.sig
+.DS_Store
+iptv-auth.txt
+*.secret
+.env
