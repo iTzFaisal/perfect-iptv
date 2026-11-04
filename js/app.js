@@ -12,7 +12,7 @@
   var Screens = IPTV.Screens;
   var Player = IPTV.Player;
 
-  var VERSION = '1.0.4';
+  var VERSION = '1.0.5';
   var CONTINUE_CATEGORY = 'continue';
   var SEARCH_LABELS = { live: 'Live TV', vod: 'Movies', series: 'Series' };
   var TEXT_SIZES = { standard: 1.25, large: 1.5, xlarge: 1.7 };
@@ -48,7 +48,7 @@
         token: 0
       }
     },
-    cache: { epg: {}, vodInfo: {}, seriesInfo: {}, all: null },
+    cache: { epg: {}, vodInfo: {}, seriesInfo: {}, all: null, pending: {} },
     modalContext: null,
     epgToken: 0,
     modalToken: 0,
@@ -96,8 +96,8 @@
   }
 
   function applyTextSize() {
-    var size = Store.settings.textSize || 'large';
-    var scale = TEXT_SIZES[size] || TEXT_SIZES.large;
+    var size = Store.settings.textSize || 'standard';
+    var scale = TEXT_SIZES[size] || TEXT_SIZES.standard;
     document.documentElement.style.setProperty('--text-scale', String(scale));
   }
 
@@ -1110,6 +1110,8 @@
 
   /* ---------------- Search ---------------- */
 
+  var searchTimer = null;
+
   function searchViewFor(type) {
     if (type === 'vod') return 'movies';
     if (type === 'series') return 'series';
@@ -1118,6 +1120,7 @@
 
   function openSearch(type) {
     type = SEARCH_LABELS[type] ? type : 'live';
+    if (searchTimer) { clearTimeout(searchTimer); searchTimer = null; }
     var state = App.state.search;
     state.type = type;
     state.query = '';
@@ -1132,16 +1135,24 @@
   function ensureCatalog(type) {
     if (!App.cache.all) App.cache.all = { live: null, vod: null, series: null };
     if (App.cache.all[type]) return Promise.resolve(App.cache.all[type]);
+    if (!App.cache.pending) App.cache.pending = {};
+    if (App.cache.pending[type]) return App.cache.pending[type];
     if (!App.api) return Promise.resolve([]);
     var loader;
     if (type === 'live') loader = App.api.getAllLiveStreams();
     else if (type === 'vod') loader = App.api.getAllVodStreams();
     else loader = App.api.getAllSeries();
-    return loader.then(function (list) {
+    var request = loader.then(function (list) {
+      if (App.cache.pending && App.cache.pending[type] === request) delete App.cache.pending[type];
       if (!App.cache.all) App.cache.all = { live: null, vod: null, series: null };
       App.cache.all[type] = Array.isArray(list) ? list : [];
       return App.cache.all[type];
+    }).catch(function (err) {
+      if (App.cache.pending && App.cache.pending[type] === request) delete App.cache.pending[type];
+      throw err;
     });
+    App.cache.pending[type] = request;
+    return request;
   }
 
   function filterList(list, query, limit) {
@@ -1151,42 +1162,61 @@
     }).slice(0, limit || 120);
   }
 
-  function doSearch() {
+  function renderSearchResults() {
+    if (App.view !== 'search') return;
+    var body = $('#search-body');
+    if (!body) return;
+    body.innerHTML = Screens.searchResults(App.state.search, App.api);
+  }
+
+  function doSearch(immediate) {
     var input = $('#search-input');
     var state = App.state.search;
-    var query = input ? input.value.trim() : state.query;
+    var query = (input ? input.value : state.query || '').trim();
+    if (searchTimer) { clearTimeout(searchTimer); searchTimer = null; }
+    state.query = query;
+    state.error = null;
+
     if (!query) {
-      UI.toast('Type something to search for.');
-      if (input) UI.focus(input);
+      state.token++;
+      state.loading = false;
+      state.results = [];
+      renderSearchResults();
       return;
     }
-    state.query = query;
-    state.loading = true;
-    state.error = null;
-    state.results = [];
+
     var token = ++state.token;
     var type = state.type || 'live';
-    renderView();
-    setTimeout(function () { UI.focus($('#search-input')); }, 20);
+    searchTimer = setTimeout(function () {
+      searchTimer = null;
+      if (token !== state.token || App.view !== 'search') return;
 
-    ensureCatalog(type).then(function (list) {
-      if (token !== state.token || App.view !== 'search') return;
-      state.results = filterList(list, query, 120);
-      state.loading = false;
-      renderView();
-      var first = $('#search-results [data-focusable]');
-      if (first) UI.focus(first);
-      else {
-        var again = $('#search-input');
-        if (again) UI.focus(again);
+      // Once the catalog is cached, filtering is instant and needs no
+      // loading flash between keystrokes.
+      var cached = App.cache.all && App.cache.all[type];
+      if (cached) {
+        state.results = filterList(cached, query, 120);
+        state.loading = false;
+        renderSearchResults();
+        return;
       }
-    }).catch(function (err) {
-      if (token !== state.token || App.view !== 'search') return;
-      state.loading = false;
-      state.error = 'Could not search ' + (SEARCH_LABELS[type] || 'your catalog') + '. ' + IPTV.errorMessage(err);
-      renderView();
-      setTimeout(function () { UI.focus($('#search-input')); }, 20);
-    });
+
+      state.loading = true;
+      state.results = [];
+      renderSearchResults();
+
+      ensureCatalog(type).then(function (list) {
+        if (token !== state.token || App.view !== 'search') return;
+        state.results = filterList(list, query, 120);
+        state.loading = false;
+        renderSearchResults();
+      }).catch(function (err) {
+        if (token !== state.token || App.view !== 'search') return;
+        state.loading = false;
+        state.error = 'Could not search ' + (SEARCH_LABELS[type] || 'your catalog') + '. ' + IPTV.errorMessage(err);
+        renderSearchResults();
+      });
+    }, immediate ? 0 : 220);
   }
 
   /* ---------------- Settings actions ---------------- */
@@ -1210,7 +1240,7 @@
       if (!yes || !App.api) return;
       UI.loading(true, 'Refreshing your catalog…');
       App.api.clearCache();
-      App.cache = { epg: {}, vodInfo: {}, seriesInfo: {}, all: null };
+      App.cache = { epg: {}, vodInfo: {}, seriesInfo: {}, all: null, pending: {} };
       App.modalContext = null;
       App.state.live = freshLive();
       App.state.vod = freshVod();
@@ -1247,7 +1277,7 @@
       App.state.live = freshLive();
       App.state.vod = freshVod();
       App.state.series = freshVod();
-      App.cache = { epg: {}, vodInfo: {}, seriesInfo: {}, all: null };
+      App.cache = { epg: {}, vodInfo: {}, seriesInfo: {}, all: null, pending: {} };
       showLogin({ clear: true });
     });
   }
@@ -1355,7 +1385,6 @@
       var action = actionEl.getAttribute('data-action');
 
       if (action === 'section-search') { openSearch(actionEl.getAttribute('data-type')); return; }
-      if (action === 'search-back') { switchView(App.searchReturnView || 'live'); return; }
       if (action === 'account-menu') { switchView('settings'); return; }
 
       if (action === 'category') {
@@ -1408,7 +1437,6 @@
         focusFavorites();
         return;
       }
-      if (action === 'do-search') { doSearch(); return; }
       if (action === 'load-more') {
         var state = App.view === 'live' ? App.state.live : (App.view === 'movies' ? App.state.vod : (App.view === 'series' ? App.state.series : null));
         if (!state) return;
@@ -1423,7 +1451,7 @@
         if (App.view === 'live') loadLive(App.state.live.categoryId, true);
         else if (App.view === 'movies') loadVod(App.state.vod.categoryId, true);
         else if (App.view === 'series') loadSeries(App.state.series.categoryId, true);
-        else if (App.view === 'search') doSearch();
+        else if (App.view === 'search') doSearch(true);
         return;
       }
       if (action === 'setting') {
@@ -1481,12 +1509,25 @@
       selectChannelDebounced(card.getAttribute('data-id'));
     });
 
+    $('#view').addEventListener('input', function (e) {
+      if (e.target && e.target.id === 'search-input' && App.view === 'search') doSearch();
+    });
+
     $('#view').addEventListener('keydown', function (e) {
-      if (e.target && e.target.id === 'search-input' && (e.keyCode === 13 || e.key === 'Enter')) {
-        // Empty + Enter should let the TV open its on-screen keyboard.
-        if (e.target.value && e.target.value.trim()) {
+      if (e.target && e.target.id === 'search-input') {
+        // Back leaves search directly instead of only blurring the field.
+        var isBack = e.keyCode === 10009 || e.key === 'Escape' ||
+          e.key === 'GoBack' || e.key === 'BrowserBack';
+        if (isBack) {
           e.preventDefault();
-          doSearch();
+          e.stopPropagation();
+          switchView(App.searchReturnView || 'live');
+          return;
+        }
+        // Empty + Enter should let the TV open its on-screen keyboard.
+        if ((e.keyCode === 13 || e.key === 'Enter') && e.target.value && e.target.value.trim()) {
+          e.preventDefault();
+          doSearch(true);
         }
       }
     });

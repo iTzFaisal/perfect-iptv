@@ -358,7 +358,7 @@
     series: { title: 'Series', noun: 'series', grid: 'poster-grid', placeholder: 'Search series…' }
   };
 
-  Screens.search = function (state, api) {
+  function searchResultsMarkup(state, api) {
     var type = state.type || 'live';
     var meta = SEARCH_META[type] || SEARCH_META.live;
     var body;
@@ -368,8 +368,8 @@
       body = '<div id="search-results">' + errorState(state.error) + '</div>';
     } else if (!state.query) {
       body = '<div id="search-results">' + emptyState('search', 'Search ' + meta.title,
-        'Type a name and press OK on the search box to open the TV keyboard, then press Enter. ' +
-        'Results stay inside ' + meta.title + '.') + '</div>';
+        'Start typing to search ' + meta.title + '. Press OK on the search box to open the ' +
+        'TV keyboard. Results stay inside ' + meta.title + '.') + '</div>';
     } else if (!state.results || !state.results.length) {
       body = '<div id="search-results">' + emptyState('search', 'No matches in ' + meta.title,
         'Nothing matched “' + state.query + '”. Try a shorter or different search.') + '</div>';
@@ -388,18 +388,28 @@
         '<p>' + esc(countText) + '</p></div>';
     }
 
+    return summary + body;
+  }
+
+  // Only the results are re-rendered while typing, keeping the input (and the
+  // TV keyboard attached to it) alive.
+  Screens.searchResults = function (state, api) {
+    return searchResultsMarkup(state, api);
+  };
+
+  Screens.search = function (state, api) {
+    var type = state.type || 'live';
+    var meta = SEARCH_META[type] || SEARCH_META.live;
     return '<div class="view-standard">' +
       '<div class="search-bar">' +
         '<div class="search-input-wrap">' + icon('search') +
           '<input id="search-input" class="search-input" type="text" placeholder="' + esc(meta.placeholder) + '" ' +
           'value="' + esc(state.query || '') + '" autocomplete="off" spellcheck="false" data-focusable>' +
         '</div>' +
-        '<button class="btn btn-primary" data-action="do-search" data-focusable>' + icon('search') + 'Search</button>' +
-        '<button class="btn btn-ghost" data-action="search-back" data-focusable>' + icon('arrow-left') + 'Back</button>' +
       '</div>' +
-      '<p class="search-hint">' + esc('Searching ' + meta.title + ' only. Press OK in the search box to open the keyboard, then press Enter.') + '</p>' +
-      summary +
-      body +
+      '<p class="search-hint">' + esc('Results update as you type. Searching ' + meta.title +
+        ' only. Press OK in the search box to open the TV keyboard, then press Back to leave search.') + '</p>' +
+      '<div id="search-body">' + searchResultsMarkup(state, api) + '</div>' +
     '</div>';
   };
 
@@ -414,7 +424,7 @@
     var engine = Store.settings.playerEngine;
     var streamFormat = Store.settings.streamFormat;
     var timeFormat = Store.settings.timeFormat;
-    var textSize = Store.settings.textSize || 'large';
+    var textSize = Store.settings.textSize || 'standard';
     return '<div class="view-standard">' +
       '<div class="settings-grid">' +
         '<div class="settings-card wide">' +
@@ -480,7 +490,7 @@
           '<h3>About</h3>' +
           '<p>Perfect IPTV is a media player for Xtream Codes providers. It does not include, host, or sell any channels or media.</p>' +
           '<div class="settings-rows">' +
-            settingRow('Version', appVersion || '1.0.4') +
+            settingRow('Version', appVersion || '1.0.5') +
             settingRow('Platform', 'Samsung Tizen TV') +
           '</div>' +
           '<div class="settings-actions">' +

@@ -72,8 +72,8 @@ fs.mkdirSync(OUT, { recursive: true });
   // Live search is scoped to live channels only.
   await page.click('[data-action="section-search"][data-type="live"]');
   await page.waitForSelector('#search-input');
+  console.log('search screen buttons:', await page.locator('.search-bar button').count());
   await page.fill('#search-input', 'Arena');
-  await page.press('#search-input', 'Enter');
   await page.waitForSelector('#search-results .channel-card', { timeout: 15000 });
   await page.waitForTimeout(500);
   await page.screenshot({ path: path.join(OUT, '06-search-live.png') });
@@ -92,7 +92,6 @@ fs.mkdirSync(OUT, { recursive: true });
   await page.click('[data-action="section-search"][data-type="vod"]');
   await page.waitForSelector('#search-input');
   await page.fill('#search-input', 'Night');
-  await page.press('#search-input', 'Enter');
   await page.waitForSelector('#search-results .poster-card', { timeout: 15000 });
   await page.waitForTimeout(500);
   await page.screenshot({ path: path.join(OUT, '06-search-movies.png') });
@@ -116,7 +115,6 @@ fs.mkdirSync(OUT, { recursive: true });
   await page.click('[data-action="section-search"][data-type="series"]');
   await page.waitForSelector('#search-input');
   await page.fill('#search-input', 'Night');
-  await page.press('#search-input', 'Enter');
   await page.waitForSelector('#search-results .poster-card', { timeout: 15000 });
   await page.waitForTimeout(500);
   await page.screenshot({ path: path.join(OUT, '06-search-series.png') });
@@ -192,6 +190,9 @@ fs.mkdirSync(OUT, { recursive: true });
   await page.waitForTimeout(400);
   await page.screenshot({ path: path.join(OUT, '10-settings.png') });
   console.log('text size buttons:', await page.locator('[data-setting="textSize"]').count());
+  console.log('default text size:', await page.evaluate(() => window.IPTV.Store.settings.textSize));
+  console.log('standard selected:', await page.locator('[data-setting="textSize"][data-value="standard"]')
+    .evaluate((el) => el.classList.contains('is-active')));
 
   // Text size should apply immediately and persist.
   await page.click('[data-setting="textSize"][data-value="xlarge"]');

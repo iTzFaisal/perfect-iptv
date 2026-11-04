@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Install a signed .wgt on a Samsung TV over the local network.
 #
-#   scripts/deploy.sh 192.168.1.50 [dist/PerfectIPTV-1.0.4.wgt]
+#   scripts/deploy.sh 192.168.1.50 [dist/PerfectIPTV-1.0.5.wgt]
 #
 # Requires Tizen Studio (sdb + tizen CLI), Developer Mode on the TV, and a
 # Samsung certificate that includes the TV's DUID. Tizen Homebrew is easier

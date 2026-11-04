@@ -201,7 +201,7 @@
 
   var DEFAULT_SETTINGS = {
     timeFormat: '24h',
-    textSize: 'large',      // standard | large | xlarge
+    textSize: 'standard',   // standard | large | xlarge
     playerEngine: 'auto',   // auto | avplay | html5
     streamFormat: 'm3u8',   // m3u8 | ts
     autoplay: true,

@@ -5,8 +5,8 @@
 
 :root {
   /* Text scale is changed from Settings → Display → Text size.
-     The default is deliberately large enough for a 65" TV at couch distance. */
-  --text-scale: 1.5;
+     Standard is the default; Large and Extra large are opt-in. */
+  --text-scale: 1.25;
   --bg: #05070d;
   --bg-soft: #080c15;
   --panel: rgba(15, 21, 35, 0.78);
