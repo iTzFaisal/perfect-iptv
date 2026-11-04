@@ -12,6 +12,8 @@
 
   var Screens = {};
 
+  var CONTINUE_CATEGORY = 'continue';
+
   function img(api, url, name, alt) {
     return UI.img(url ? api.imageUrl(url) : '', name, alt || name);
   }
@@ -43,11 +45,19 @@
     return '<div class="pane-state"><div class="spinner"></div><p>' + esc(label || 'Loading…') + '</p></div>';
   }
 
-  function categoryIdOf(item) { return item && (item.category_id || 'all'); }
-
-  function categoriesHtml(categories, activeId, allLabel) {
+  function categoriesHtml(categories, activeId, allLabel, continueType) {
     var list = [{ category_id: 'all', category_name: allLabel || 'All' }].concat(categories || []);
-    return list.map(function (c) {
+    var html = '';
+    if (continueType) {
+      var continueCount = Store.continueWatching(continueType).length;
+      var continueActive = String(activeId) === CONTINUE_CATEGORY;
+      html += '<button class="cat-item cat-continue ' + (continueActive ? 'is-active' : '') + '" ' +
+        'data-action="category" data-category="' + CONTINUE_CATEGORY + '" data-focusable>' +
+        '<span class="cat-label">' + icon('history') + '<span>Continue watching</span></span>' +
+        '<small>' + esc(String(continueCount)) + '</small>' +
+        '</button><div class="cat-sep"></div>';
+    }
+    return html + list.map(function (c) {
       var id = String(c.category_id);
       var active = String(activeId) === id;
       return '<button class="cat-item ' + (active ? 'is-active' : '') + '" ' +
@@ -55,6 +65,76 @@
         '<span>' + esc(c.category_name || 'Uncategorized') + '</span>' +
         (active ? '<small>' + icon('check') + '</small>' : '') +
         '</button>';
+    }).join('');
+  }
+
+  function searchButton(type) {
+    var label = type === 'live' ? 'Search channels' : (type === 'vod' ? 'Search movies' : 'Search series');
+    return '<button class="pane-search" data-action="section-search" data-type="' + type + '" ' +
+      'data-focusable aria-label="' + label + '">' + icon('search') + '<span>Search</span></button>';
+  }
+
+  function progressRatio(record) {
+    if (!record || !record.duration || record.duration <= 0) return 0;
+    return Math.max(0, Math.min(1, Number(record.position || 0) / Number(record.duration)));
+  }
+
+  function continueSubtitle(type, record) {
+    var ago = IPTV.fmtAgo(record.updated);
+    var prefix = '';
+    if (type === 'series') {
+      var episode = record.episode ? ('S' + (record.season || '1') + ' E' + record.episode) : 'Episode';
+      prefix = episode + '  ·  ';
+    }
+    if (record.duration && record.position != null) {
+      var left = Math.max(0, Number(record.duration) - Number(record.position));
+      if (left <= 15) return prefix + 'Watched ' + ago;
+      return prefix + IPTV.fmtDuration(left) + ' left';
+    }
+    return prefix + ('Watched ' + ago);
+  }
+
+  function continueGrid(type, api) {
+    var items = Store.continueWatching(type);
+    if (!items.length) {
+      if (type === 'live') {
+        return emptyState('history', 'Nothing watched yet',
+          'Channels you watch will appear here so you can jump back in quickly.');
+      }
+      if (type === 'series') {
+        return emptyState('history', 'Nothing to continue',
+          'Start an episode and it will appear here so you can pick up where you left off.');
+      }
+      return emptyState('history', 'Nothing to continue',
+        'Start a movie and it will appear here with your resume position.');
+    }
+    if (type === 'live') {
+      return items.map(function (item, i) {
+        return channelCard(item, api, { index: i, nowText: 'Last watched ' + IPTV.fmtAgo(item.updated) });
+      }).join('');
+    }
+    return items.map(function (record, i) {
+      var progress = progressRatio(record);
+      var subtitle = continueSubtitle(type, record);
+      if (type === 'series') {
+        var series = {
+          series_id: record.seriesId,
+          name: record.seriesName || 'Series',
+          cover: record.cover || ''
+        };
+        return posterCard(series, 'series', api, {
+          index: i,
+          action: 'resume-series',
+          sub: subtitle,
+          progress: progress
+        });
+      }
+      return posterCard(record, 'vod', api, {
+        index: i,
+        action: 'resume-vod',
+        sub: subtitle,
+        progress: progress
+      });
     }).join('');
   }
 
@@ -67,6 +147,8 @@
     if (item.num) sub.push('CH ' + item.num);
     if (String(item.tv_archive) === '1') sub.push('Catch-up');
     if (!sub.length) sub.push('Live TV');
+    var nowText = options.nowText ||
+      (String(item.tv_archive) === '1' ? 'Live + catch-up' : 'Live channel');
     return '<button class="channel-card ' + (fav ? 'is-favorite' : '') + '" ' +
       'data-action="' + (options.action || 'channel') + '" ' +
       'data-id="' + esc(id) + '" data-index="' + (options.index != null ? options.index : '') + '" data-focusable>' +
@@ -74,7 +156,7 @@
       '<span class="channel-meta">' +
         '<span class="channel-name">' + esc(item.name || 'Unnamed channel') + '</span>' +
         '<span class="channel-sub">' + sub.map(esc).join('<span class="dot"></span>') + '</span>' +
-        '<span class="channel-now">' + (String(item.tv_archive) === '1' ? 'Live + catch-up' : 'Live channel') + '</span>' +
+        '<span class="channel-now">' + esc(nowText) + '</span>' +
       '</span>' +
     '</button>';
   }
@@ -89,11 +171,16 @@
     var badges = '';
     if (rating) badges += '<span class="poster-badge gold">★ ' + esc(rating) + '</span>';
     if (fav) badges += '<span class="poster-badge" style="left:auto;right:8px;color:#ff8fa2">♥</span>';
-    return '<button class="poster-card" data-action="' + (type === 'series' ? 'series-detail' : 'vod-detail') + '" ' +
+    var progress = Math.max(0, Math.min(1, Number(options.progress) || 0));
+    var progressBar = progress > 0
+      ? '<span class="poster-progress"><span style="width:' + Math.round(progress * 100) + '%"></span></span>'
+      : '';
+    return '<button class="poster-card" data-action="' +
+      (options.action || (type === 'series' ? 'series-detail' : 'vod-detail')) + '" ' +
       'data-id="' + esc(id) + '" data-index="' + (options.index != null ? options.index : '') + '" data-focusable>' +
-      '<span class="poster-art">' + img(api, artUrl(api, item, type), item.name) + badges + '</span>' +
+      '<span class="poster-art">' + img(api, artUrl(api, item, type), item.name) + badges + progressBar + '</span>' +
       '<span class="poster-title">' + esc(item.name || 'Untitled') + '</span>' +
-      '<span class="poster-sub">' + esc(sub || (type === 'series' ? 'Series' : 'Movie')) + '</span>' +
+      '<span class="poster-sub">' + esc(options.sub || sub || (type === 'series' ? 'Series' : 'Movie')) + '</span>' +
     '</button>';
   }
 
@@ -114,21 +201,25 @@
   /* ---------------- Live ---------------- */
 
   Screens.live = function (state, api) {
-    var selected = state.items.find(function (i) { return String(i.stream_id) === String(state.selectedId); });
-    var grid = gridOrState(state.items, state, function (item, idx) {
+    var continueMode = state.categoryId === CONTINUE_CATEGORY;
+    var items = continueMode ? Store.continueWatching('live') : state.items;
+    var selected = items.find(function (i) { return String(i.stream_id) === String(state.selectedId); });
+    var grid = continueMode ? continueGrid('live', api) : gridOrState(state.items, state, function (item, idx) {
       return channelCard(item, api, { index: idx });
     }, 'live', 'No channels in this category', 'Pick another category on the left, or refresh your catalog from Settings.');
+    var count = continueMode ? String(items.length) : (state.loading ? 'Loading…' : String(state.items.length));
     return '<div class="view-live">' +
       '<div class="pane categories">' +
         '<div class="pane-head"><span class="pane-title">Categories</span>' +
           '<span class="pane-count">' + esc(String((state.categories || []).length)) + '</span></div>' +
         '<div class="pane-body"><div class="cat-list">' +
-          categoriesHtml(state.categories, state.categoryId, 'All channels') +
+          categoriesHtml(state.categories, state.categoryId, 'All channels', 'live') +
         '</div></div>' +
       '</div>' +
       '<div class="pane live-content">' +
-        '<div class="pane-head"><span class="pane-title">Channels</span>' +
-          '<span class="pane-count">' + esc(state.loading ? 'Loading…' : String(state.items.length)) + '</span></div>' +
+        '<div class="pane-head"><span class="pane-title">' + (continueMode ? 'Recently watched' : 'Channels') + '</span>' +
+          '<div class="pane-tools"><span class="pane-count">' + esc(count) + '</span>' +
+            searchButton('live') + '</div></div>' +
         '<div class="pane-body"><div class="live-grid">' + grid + '</div></div>' +
       '</div>' +
       '<div class="pane live-preview" id="live-preview">' + Screens.preview(selected, state, api) + '</div>' +
@@ -194,22 +285,27 @@
 
   function browseView(state, api, kind) {
     var isSeries = kind === 'series';
-    var grid = gridOrState(state.items, state, function (item, idx) {
+    var continueMode = state.categoryId === CONTINUE_CATEGORY;
+    var continueType = isSeries ? 'series' : 'vod';
+    var items = continueMode ? Store.continueWatching(continueType) : state.items;
+    var grid = continueMode ? continueGrid(continueType, api) : gridOrState(state.items, state, function (item, idx) {
       return posterCard(item, kind, api, { index: idx });
     }, isSeries ? 'series' : 'movies',
       isSeries ? 'No series in this category' : 'No movies in this category',
       'Try another category, or refresh your catalog from Settings.');
+    var count = continueMode ? String(items.length) : (state.loading ? 'Loading…' : String(state.items.length));
     return '<div class="view-browse">' +
       '<div class="pane categories">' +
         '<div class="pane-head"><span class="pane-title">Categories</span>' +
           '<span class="pane-count">' + esc(String((state.categories || []).length)) + '</span></div>' +
         '<div class="pane-body"><div class="cat-list">' +
-          categoriesHtml(state.categories, state.categoryId, isSeries ? 'All series' : 'All movies') +
+          categoriesHtml(state.categories, state.categoryId, isSeries ? 'All series' : 'All movies', continueType) +
         '</div></div>' +
       '</div>' +
       '<div class="pane browse-content">' +
-        '<div class="pane-head"><span class="pane-title">' + (isSeries ? 'Series' : 'Movies') + '</span>' +
-          '<span class="pane-count">' + esc(state.loading ? 'Loading…' : String(state.items.length)) + '</span></div>' +
+        '<div class="pane-head"><span class="pane-title">' + (continueMode ? 'Continue watching' : (isSeries ? 'Series' : 'Movies')) + '</span>' +
+          '<div class="pane-tools"><span class="pane-count">' + esc(count) + '</span>' +
+            searchButton(continueType) + '</div></div>' +
         '<div class="pane-body"><div class="poster-grid">' + grid + '</div></div>' +
       '</div>' +
     '</div>';
@@ -256,50 +352,56 @@
 
   /* ---------------- Search ---------------- */
 
+  var SEARCH_META = {
+    live: { title: 'Live TV', noun: 'channels', grid: 'live-grid', placeholder: 'Search live channels…' },
+    vod: { title: 'Movies', noun: 'movies', grid: 'poster-grid', placeholder: 'Search movies…' },
+    series: { title: 'Series', noun: 'series', grid: 'poster-grid', placeholder: 'Search series…' }
+  };
+
   Screens.search = function (state, api) {
+    var type = state.type || 'live';
+    var meta = SEARCH_META[type] || SEARCH_META.live;
     var body;
     if (state.loading) {
-      body = '<div id="search-results">' + loadingState('Searching your catalog…') + '</div>';
+      body = '<div id="search-results">' + loadingState('Searching ' + meta.noun + '…') + '</div>';
     } else if (state.error) {
       body = '<div id="search-results">' + errorState(state.error) + '</div>';
     } else if (!state.query) {
-      body = '<div id="search-results">' + emptyState('search', 'Search everything',
-        'Type a channel, movie, or series name. Press OK on the search box to open the TV keyboard.') + '</div>';
-    } else if (!state.results || (!state.results.live.length && !state.results.vod.length && !state.results.series.length)) {
-      body = '<div id="search-results">' + emptyState('search', 'No matches',
+      body = '<div id="search-results">' + emptyState('search', 'Search ' + meta.title,
+        'Type a name and press OK on the search box to open the TV keyboard, then press Enter. ' +
+        'Results stay inside ' + meta.title + '.') + '</div>';
+    } else if (!state.results || !state.results.length) {
+      body = '<div id="search-results">' + emptyState('search', 'No matches in ' + meta.title,
         'Nothing matched “' + state.query + '”. Try a shorter or different search.') + '</div>';
     } else {
-      body = '<div id="search-results">';
-      body += resultBlock('Live TV', state.results.live.map(function (item, i) {
-        return channelCard(item, api, { index: i });
-      }).join(''), 'live-grid');
-      body += resultBlock('Movies', state.results.vod.map(function (item, i) {
-        return posterCard(item, 'vod', api, { index: i });
-      }).join(''), 'poster-grid');
-      body += resultBlock('Series', state.results.series.map(function (item, i) {
-        return posterCard(item, 'series', api, { index: i });
-      }).join(''), 'poster-grid');
-      body += '</div>';
+      var cards = type === 'live'
+        ? state.results.map(function (item, i) { return channelCard(item, api, { index: i }); }).join('')
+        : state.results.map(function (item, i) { return posterCard(item, type, api, { index: i }); }).join('');
+      body = '<div id="search-results" class="' + meta.grid + '">' + cards + '</div>';
+    }
+
+    var summary = '';
+    if (state.query && !state.error) {
+      var countText = state.loading ? 'Searching…'
+        : String((state.results || []).length) + ' result' + ((state.results || []).length === 1 ? '' : 's');
+      summary = '<div class="section-head search-results-head"><h2>' + esc(meta.title) + '</h2>' +
+        '<p>' + esc(countText) + '</p></div>';
     }
 
     return '<div class="view-standard">' +
       '<div class="search-bar">' +
         '<div class="search-input-wrap">' + icon('search') +
-          '<input id="search-input" class="search-input" type="text" placeholder="Search channels, movies, series…" ' +
+          '<input id="search-input" class="search-input" type="text" placeholder="' + esc(meta.placeholder) + '" ' +
           'value="' + esc(state.query || '') + '" autocomplete="off" spellcheck="false" data-focusable>' +
         '</div>' +
         '<button class="btn btn-primary" data-action="do-search" data-focusable>' + icon('search') + 'Search</button>' +
+        '<button class="btn btn-ghost" data-action="search-back" data-focusable>' + icon('arrow-left') + 'Back</button>' +
       '</div>' +
-      '<p class="search-hint">Press OK in the search box to open the keyboard, then press Enter to search.</p>' +
+      '<p class="search-hint">' + esc('Searching ' + meta.title + ' only. Press OK in the search box to open the keyboard, then press Enter.') + '</p>' +
+      summary +
       body +
     '</div>';
   };
-
-  function resultBlock(title, content, gridClass) {
-    if (!content) return '';
-    return '<div class="result-block"><div class="section-head"><h2>' + esc(title) + '</h2></div>' +
-      '<div class="' + gridClass + '">' + content + '</div></div>';
-  }
 
   /* ---------------- Settings ---------------- */
 
@@ -312,6 +414,7 @@
     var engine = Store.settings.playerEngine;
     var streamFormat = Store.settings.streamFormat;
     var timeFormat = Store.settings.timeFormat;
+    var textSize = Store.settings.textSize || 'large';
     return '<div class="view-standard">' +
       '<div class="settings-grid">' +
         '<div class="settings-card wide">' +
@@ -353,16 +456,23 @@
 
         '<div class="settings-card">' +
           '<h3>Display</h3>' +
-          '<p>Choose how times appear across the guide and player.</p>' +
+          '<p>Make text easier to read on your TV and from your usual viewing distance.</p>' +
           '<div class="settings-rows">' +
+            '<div class="settings-row"><span class="label">Text size</span>' +
+              '<div class="seg">' +
+                segButton('textSize', 'standard', 'Standard', textSize === 'standard') +
+                segButton('textSize', 'large', 'Large', textSize === 'large') +
+                segButton('textSize', 'xlarge', 'Extra large', textSize === 'xlarge') +
+              '</div></div>' +
             '<div class="settings-row"><span class="label">Clock</span>' +
               '<div class="seg">' +
                 segButton('timeFormat', '24h', '24-hour', timeFormat === '24h') +
                 segButton('timeFormat', '12h', '12-hour', timeFormat === '12h') +
               '</div></div>' +
           '</div>' +
+          '<div class="settings-note">Choose Extra large if the TV is far away or text is still hard to read.</div>' +
           '<div class="settings-actions">' +
-            '<button class="btn btn-ghost btn-sm" data-action="clear-history" data-focusable>' + icon('clock') + 'Clear resume history</button>' +
+            '<button class="btn btn-ghost btn-sm" data-action="clear-history" data-focusable>' + icon('history') + 'Clear watch history</button>' +
           '</div>' +
         '</div>' +
 
@@ -370,7 +480,7 @@
           '<h3>About</h3>' +
           '<p>Perfect IPTV is a media player for Xtream Codes providers. It does not include, host, or sell any channels or media.</p>' +
           '<div class="settings-rows">' +
-            settingRow('Version', appVersion || '1.0.0') +
+            settingRow('Version', appVersion || '1.0.4') +
             settingRow('Platform', 'Samsung Tizen TV') +
           '</div>' +
           '<div class="settings-actions">' +

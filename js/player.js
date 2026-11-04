@@ -196,7 +196,7 @@
       UI.modal({
         eyebrow: 'Up next',
         title: options.nextTitle || 'Play the next episode?',
-        body: '<p style="color:#c3cbe0;font-size:17px;line-height:1.6">You finished this episode. Continue with the next one?</p>',
+        body: '<p class="modal-copy">You finished this episode. Continue with the next one?</p>',
         actions: [
           { label: 'Not now', value: 'close' },
           { label: 'Play next', value: 'next', primary: true }

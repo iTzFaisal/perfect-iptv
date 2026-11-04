@@ -55,6 +55,11 @@ only; do not build or port it.
   vendor`. Add new runtime files there.
 - The build fails if `config.xml` and `package.json` versions differ. Tizen uses
   the `config.xml` version; `package.json` is only npm metadata.
+- **Version bumps are patch-only:** always increase the last number
+  (`1.0.4` → `1.0.5` → `1.0.6`). Do not bump the major or minor part unless the
+  user explicitly asks. Keep `config.xml`, `package.json`, `package-lock.json`,
+  `js/app.js` (`VERSION`), the Settings version fallback, and README/deploy
+  examples in sync.
 - Pushing a `v*` tag runs `.github/workflows/release.yml`: it verifies the tag
   matches `config.xml`, runs both Playwright suites, builds the WGT, and
   publishes the package and `.sha256` to GitHub Releases. The tag must be `v` +
@@ -68,9 +73,12 @@ only; do not build or port it.
 - The test provider is large (13k+ live streams, 20k movies, 10k series) and
   currently returns no EPG (`get_short_epg` empty, `get_simple_data_table`
   `[]`). “No program information” is provider behavior, not necessarily a bug.
-- Search downloads the full catalog once per session; “All channels” initially
-  fetches ~13k streams. The UI renders in 120-item chunks. Mock data is much
-  smaller than production.
+- Search downloads only the active section’s catalog once per session; “All
+  channels” initially fetches ~13k streams. The UI renders in 120-item chunks.
+  Mock data is much smaller than production.
+- Continue watching is derived from `Store.history`: live channel rows,
+  one row per movie, and one row per series (latest episode). Text size is a
+  CSS `--text-scale` setting applied at boot and on change.
 - A `$WEBAPIS` 404 in a desktop browser is expected; only Tizen injects AVPlay.
   `mock/` and `proxy/` are not packaged.
 

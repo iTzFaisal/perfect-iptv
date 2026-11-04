@@ -80,6 +80,22 @@
     return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
   }
 
+  function fmtAgo(timestamp) {
+    var ms = Number(timestamp || 0);
+    if (!ms) return '';
+    var diff = Date.now() - ms;
+    if (diff < 0) diff = 0;
+    var minutes = Math.floor(diff / 60000);
+    if (minutes < 1) return 'just now';
+    if (minutes < 60) return minutes + ' min ago';
+    var hours = Math.floor(minutes / 60);
+    if (hours < 24) return hours + ' hr ago';
+    var days = Math.floor(hours / 24);
+    if (days === 1) return 'yesterday';
+    if (days < 7) return days + ' days ago';
+    return fmtDate(ms);
+  }
+
   function b64Decode(value) {
     if (!value) return '';
     try {
@@ -185,6 +201,7 @@
 
   var DEFAULT_SETTINGS = {
     timeFormat: '24h',
+    textSize: 'large',      // standard | large | xlarge
     playerEngine: 'auto',   // auto | avplay | html5
     streamFormat: 'm3u8',   // m3u8 | ts
     autoplay: true,
@@ -338,6 +355,37 @@
         keys.slice(0, keys.length - 60).forEach(function (k) { delete this.history[k]; }, this);
       }
       this.saveHistory();
+    },
+
+    historyOf: function (type) {
+      var prefix = type + ':';
+      return Object.keys(this.history)
+        .filter(function (key) { return key.indexOf(prefix) === 0; })
+        .map(function (key) { return this.history[key]; }, this)
+        .filter(Boolean)
+        .sort(function (a, b) { return (b.updated || 0) - (a.updated || 0); });
+    },
+
+    // Series history stores one row per episode. Continue watching should show
+    // one card per series, using the most recently watched episode.
+    continueWatching: function (type) {
+      var records = this.historyOf(type);
+      if (type !== 'series') return records;
+      var seen = {};
+      return records.filter(function (record) {
+        var id = String(record.seriesId || '');
+        if (!id || seen[id]) return false;
+        seen[id] = true;
+        return true;
+      });
+    },
+
+    latestFor: function (type, id) {
+      id = String(id);
+      return this.historyOf(type).find(function (record) {
+        if (type === 'series') return String(record.seriesId) === id;
+        return String(record.stream_id || record.id) === id;
+      }) || null;
     },
 
     clearHistory: function () {
@@ -810,6 +858,7 @@
   IPTV.fmtDuration = fmtDuration;
   IPTV.fmtPosition = fmtPosition;
   IPTV.fmtDate = fmtDate;
+  IPTV.fmtAgo = fmtAgo;
   IPTV.b64Decode = b64Decode;
   IPTV.normalizeServer = normalizeServer;
   IPTV.parseProviderInput = parseProviderInput;

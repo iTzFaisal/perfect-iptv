@@ -12,7 +12,10 @@
   var Screens = IPTV.Screens;
   var Player = IPTV.Player;
 
-  var VERSION = '1.0.0';
+  var VERSION = '1.0.4';
+  var CONTINUE_CATEGORY = 'continue';
+  var SEARCH_LABELS = { live: 'Live TV', vod: 'Movies', series: 'Series' };
+  var TEXT_SIZES = { standard: 1.25, large: 1.5, xlarge: 1.7 };
 
   function freshLive() {
     return {
@@ -30,12 +33,20 @@
     api: null,
     account: null,
     view: 'live',
+    searchReturnView: 'live',
     state: {
       live: freshLive(),
       vod: freshVod(),
       series: freshVod(),
       favorites: { tab: 'live' },
-      search: { query: '', results: { live: [], vod: [], series: [] }, loading: false, error: null, token: 0 }
+      search: {
+        type: 'live',
+        query: '',
+        results: [],
+        loading: false,
+        error: null,
+        token: 0
+      }
     },
     cache: { epg: {}, vodInfo: {}, seriesInfo: {}, all: null },
     modalContext: null,
@@ -84,6 +95,12 @@
     $('#boot-screen').classList.add('hidden');
   }
 
+  function applyTextSize() {
+    var size = Store.settings.textSize || 'large';
+    var scale = TEXT_SIZES[size] || TEXT_SIZES.large;
+    document.documentElement.style.setProperty('--text-scale', String(scale));
+  }
+
   function updateClock() {
     var el = $('#clock');
     if (el) el.textContent = IPTV.fmtClock(new Date(), Store.settings.timeFormat);
@@ -119,12 +136,18 @@
 
   function updateChrome() {
     var meta = VIEW_META[App.view] || VIEW_META.live;
+    if (App.view === 'search') {
+      var searchType = App.state.search.type || 'live';
+      var label = SEARCH_LABELS[searchType] || SEARCH_LABELS.live;
+      meta = { title: 'Search ' + label, eyebrow: label + ' only' };
+    }
     var title = $('#view-title');
     var eyebrow = $('#view-eyebrow');
     if (title) title.textContent = meta.title;
     if (eyebrow) eyebrow.textContent = meta.eyebrow;
+    var navView = App.view === 'search' ? App.searchReturnView : App.view;
     $$('#nav .nav-item').forEach(function (btn) {
-      btn.classList.toggle('is-active', btn.getAttribute('data-view') === App.view);
+      btn.classList.toggle('is-active', btn.getAttribute('data-view') === navView);
     });
   }
 
@@ -384,7 +407,8 @@
   }
 
   function focusBrowse() {
-    var card = $('#view [data-action="vod-detail"], #view [data-action="series-detail"]');
+    var card = $('#view [data-action="vod-detail"], #view [data-action="series-detail"], ' +
+      '#view [data-action="resume-vod"], #view [data-action="resume-series"]');
     if (card) { UI.focus(card); return; }
     focusFirstView();
   }
@@ -411,6 +435,19 @@
   function loadLive(categoryId, force) {
     if (!App.api) return Promise.resolve();
     var state = App.state.live;
+    if (categoryId === CONTINUE_CATEGORY) {
+      state.categoryId = categoryId;
+      state.loadedCategory = categoryId;
+      state.loading = false;
+      state.error = null;
+      state.selectedId = null;
+      state.epg = null;
+      state.epgLoading = false;
+      state.token++;
+      renderView();
+      focusLive();
+      return Promise.resolve();
+    }
     if (!force && state.loadedCategory === categoryId) {
       renderView();
       focusLive();
@@ -482,9 +519,7 @@
     var active = document.activeElement;
     var restore = null;
     if (active && pane.contains(active)) restore = selectorFor(active);
-    var item = App.state.live.items.find(function (i) {
-      return String(i.stream_id) === String(App.state.live.selectedId);
-    });
+    var item = liveItem(App.state.live.selectedId);
     pane.innerHTML = Screens.preview(item, App.state.live, App.api);
     if (restore) {
       var target = pane.querySelector(restore);
@@ -498,11 +533,37 @@
     return (App.cache.all && App.cache.all[type]) || [];
   }
 
+  function searchResult(type, id) {
+    var state = App.state.search;
+    if (!state || state.type !== type) return null;
+    id = String(id);
+    return (state.results || []).find(function (item) {
+      var itemId = type === 'series' ? item.series_id : item.stream_id;
+      return String(itemId) === id;
+    }) || null;
+  }
+
   function liveItem(id) {
     id = String(id);
     return App.state.live.items.find(function (i) { return String(i.stream_id) === id; }) ||
+      searchResult('live', id) ||
+      Store.getHistory('live', id) ||
       Store.favorites.live[id] ||
       allCatalog('live').find(function (i) { return String(i.stream_id) === id; }) || null;
+  }
+
+  function rememberLive(item) {
+    if (!item || item.stream_id == null) return;
+    Store.setHistory('live', String(item.stream_id), {
+      name: item.name || 'Live TV',
+      stream_id: item.stream_id,
+      num: item.num,
+      stream_icon: item.stream_icon || '',
+      category_id: item.category_id,
+      epg_channel_id: item.epg_channel_id || '',
+      tv_archive: item.tv_archive,
+      tv_archive_duration: item.tv_archive_duration
+    });
   }
 
   function epgNowText(epg) {
@@ -517,6 +578,7 @@
     var item = liveItem(id);
     if (!item) return;
     var key = String(item.stream_id);
+    rememberLive(item);
     var cached = App.cache.epg[key];
     var epg = cached || (String(App.state.live.selectedId) === key ? App.state.live.epg : null) || [];
 
@@ -538,7 +600,10 @@
       onChannelUp: function () { zapChannel(item, -1); },
       onChannelDown: function () { zapChannel(item, 1); },
       onInfo: function () { openEpg(item.stream_id); },
-      onClose: function () { focusChannel(item.stream_id); }
+      onClose: function () {
+        if (App.view === 'live') renderView();
+        focusChannel(item.stream_id);
+      }
     });
 
     // Start playback immediately; enrich the program info when EPG arrives.
@@ -615,6 +680,7 @@
     var duration = Number(button.getAttribute('data-duration')) || 60;
     var channel = liveItem(id);
     if (!channel) return;
+    rememberLive(channel);
     var url = App.api.catchupUrl(id, start, duration);
     UI.closeModal();
     Player.play({
@@ -623,7 +689,10 @@
       title: channel.name || 'Catch-up',
       subtitle: 'Catch-up · ' + new Date(start).toLocaleString(),
       kicker: 'CATCH-UP',
-      onClose: function () { focusChannel(id); }
+      onClose: function () {
+        if (App.view === 'live') renderView();
+        focusChannel(id);
+      }
     });
   }
 
@@ -641,6 +710,16 @@
   function loadVod(categoryId, force) {
     if (!App.api) return Promise.resolve();
     var state = App.state.vod;
+    if (categoryId === CONTINUE_CATEGORY) {
+      state.categoryId = categoryId;
+      state.loadedCategory = categoryId;
+      state.loading = false;
+      state.error = null;
+      state.token++;
+      renderView();
+      focusBrowse();
+      return Promise.resolve();
+    }
     if (!force && state.loadedCategory === categoryId) {
       renderView();
       focusBrowse();
@@ -674,6 +753,8 @@
   function vodItem(id) {
     id = String(id);
     return App.state.vod.items.find(function (i) { return String(i.stream_id) === id; }) ||
+      searchResult('vod', id) ||
+      Store.getHistory('vod', id) ||
       Store.favorites.vod[id] ||
       allCatalog('vod').find(function (i) { return String(i.stream_id) === id; }) || null;
   }
@@ -740,12 +821,22 @@
           stream_icon: info.movie_image || item.stream_icon || ''
         });
       },
-      onClose: function () { focusVod(id); }
+      onClose: function () {
+        renderView();
+        focusVod(id);
+      }
     });
   }
 
+  function resumeVod(id) {
+    var item = vodItem(id);
+    if (!item) { UI.toast('Could not find that movie.'); return; }
+    playVod(item);
+  }
+
   function focusVod(id) {
-    var card = $('#view [data-action="vod-detail"][data-id="' + id + '"]');
+    var card = $('#view [data-action="vod-detail"][data-id="' + id + '"], ' +
+      '#view [data-action="resume-vod"][data-id="' + id + '"]');
     if (card) { UI.focus(card); return; }
     focusFirstView();
   }
@@ -764,6 +855,16 @@
   function loadSeries(categoryId, force) {
     if (!App.api) return Promise.resolve();
     var state = App.state.series;
+    if (categoryId === CONTINUE_CATEGORY) {
+      state.categoryId = categoryId;
+      state.loadedCategory = categoryId;
+      state.loading = false;
+      state.error = null;
+      state.token++;
+      renderView();
+      focusBrowse();
+      return Promise.resolve();
+    }
     if (!force && state.loadedCategory === categoryId) {
       renderView();
       focusBrowse();
@@ -796,9 +897,18 @@
 
   function seriesItem(id) {
     id = String(id);
-    return App.state.series.items.find(function (i) { return String(i.series_id) === id; }) ||
+    var item = App.state.series.items.find(function (i) { return String(i.series_id) === id; }) ||
+      searchResult('series', id) ||
       Store.favorites.series[id] ||
-      allCatalog('series').find(function (i) { return String(i.series_id) === id; }) || null;
+      allCatalog('series').find(function (i) { return String(i.series_id) === id; });
+    if (item) return item;
+    var record = Store.latestFor('series', id);
+    if (!record) return null;
+    return {
+      series_id: record.seriesId,
+      name: record.seriesName || 'Series',
+      cover: record.cover || ''
+    };
   }
 
   function openSeries(item, season, focusEpisodes) {
@@ -914,12 +1024,49 @@
           cover: info.cover || item.cover || ''
         });
       },
-      onClose: function () { focusSeries(item.series_id); }
+      onClose: function () {
+        renderView();
+        focusSeries(item.series_id);
+      }
+    });
+  }
+
+  function resumeSeries(id) {
+    id = String(id);
+    var record = Store.latestFor('series', id);
+    var item = seriesItem(id);
+    if (!item) { UI.toast('Could not find that series.'); return; }
+    if (!record || !record.episodeId) {
+      openSeries(item, record && record.season, true);
+      return;
+    }
+    var season = String(record.season || '1');
+    var episodeId = String(record.episodeId);
+    var start = function (data) {
+      var list = seasonEpisodes(data, season);
+      var episode = list.find(function (ep) {
+        return String(ep.id || ep.stream_id) === episodeId;
+      });
+      if (episode) playSeriesEpisode(item, data, season, episode);
+      else openSeries(item, season, true);
+    };
+    var cached = App.cache.seriesInfo[id];
+    if (cached) { start(cached); return; }
+    UI.loading(true, 'Loading episode…');
+    App.api.getSeriesInfo(id).then(function (data) {
+      UI.loading(false);
+      App.cache.seriesInfo[id] = data;
+      start(data);
+    }).catch(function (err) {
+      UI.loading(false);
+      UI.toast('Could not load that episode: ' + IPTV.errorMessage(err));
+      openSeries(item, season, true);
     });
   }
 
   function focusSeries(id) {
-    var card = $('#view [data-action="series-detail"][data-id="' + id + '"]');
+    var card = $('#view [data-action="series-detail"][data-id="' + id + '"], ' +
+      '#view [data-action="resume-series"][data-id="' + id + '"]');
     if (card) { UI.focus(card); return; }
     focusFirstView();
   }
@@ -963,21 +1110,37 @@
 
   /* ---------------- Search ---------------- */
 
-  function ensureAllCatalogs() {
-    if (App.cache.all) return Promise.resolve(App.cache.all);
-    if (!App.api) return Promise.resolve({ live: [], vod: [], series: [] });
-    UI.loading(true, 'Loading your full catalog…');
-    return Promise.all([
-      App.api.getAllLiveStreams().catch(function () { return []; }),
-      App.api.getAllVodStreams().catch(function () { return []; }),
-      App.api.getAllSeries().catch(function () { return []; })
-    ]).then(function (results) {
-      App.cache.all = { live: results[0] || [], vod: results[1] || [], series: results[2] || [] };
-      UI.loading(false);
-      return App.cache.all;
-    }).catch(function (err) {
-      UI.loading(false);
-      throw err;
+  function searchViewFor(type) {
+    if (type === 'vod') return 'movies';
+    if (type === 'series') return 'series';
+    return 'live';
+  }
+
+  function openSearch(type) {
+    type = SEARCH_LABELS[type] ? type : 'live';
+    var state = App.state.search;
+    state.type = type;
+    state.query = '';
+    state.results = [];
+    state.loading = false;
+    state.error = null;
+    state.token++;
+    App.searchReturnView = searchViewFor(type);
+    switchView('search');
+  }
+
+  function ensureCatalog(type) {
+    if (!App.cache.all) App.cache.all = { live: null, vod: null, series: null };
+    if (App.cache.all[type]) return Promise.resolve(App.cache.all[type]);
+    if (!App.api) return Promise.resolve([]);
+    var loader;
+    if (type === 'live') loader = App.api.getAllLiveStreams();
+    else if (type === 'vod') loader = App.api.getAllVodStreams();
+    else loader = App.api.getAllSeries();
+    return loader.then(function (list) {
+      if (!App.cache.all) App.cache.all = { live: null, vod: null, series: null };
+      App.cache.all[type] = Array.isArray(list) ? list : [];
+      return App.cache.all[type];
     });
   }
 
@@ -985,33 +1148,30 @@
     var q = query.toLowerCase();
     return (list || []).filter(function (item) {
       return String(item.name || '').toLowerCase().indexOf(q) !== -1;
-    }).slice(0, limit || 60);
+    }).slice(0, limit || 120);
   }
 
   function doSearch() {
     var input = $('#search-input');
-    var query = input ? input.value.trim() : App.state.search.query;
+    var state = App.state.search;
+    var query = input ? input.value.trim() : state.query;
     if (!query) {
       UI.toast('Type something to search for.');
       if (input) UI.focus(input);
       return;
     }
-    var state = App.state.search;
     state.query = query;
     state.loading = true;
     state.error = null;
-    state.results = { live: [], vod: [], series: [] };
+    state.results = [];
     var token = ++state.token;
+    var type = state.type || 'live';
     renderView();
     setTimeout(function () { UI.focus($('#search-input')); }, 20);
 
-    ensureAllCatalogs().then(function (all) {
-      if (token !== state.token) return;
-      state.results = {
-        live: filterList(all.live, query, 60),
-        vod: filterList(all.vod, query, 60),
-        series: filterList(all.series, query, 60)
-      };
+    ensureCatalog(type).then(function (list) {
+      if (token !== state.token || App.view !== 'search') return;
+      state.results = filterList(list, query, 120);
       state.loading = false;
       renderView();
       var first = $('#search-results [data-focusable]');
@@ -1021,9 +1181,9 @@
         if (again) UI.focus(again);
       }
     }).catch(function (err) {
-      if (token !== state.token) return;
+      if (token !== state.token || App.view !== 'search') return;
       state.loading = false;
-      state.error = 'Could not search your catalog. ' + IPTV.errorMessage(err);
+      state.error = 'Could not search ' + (SEARCH_LABELS[type] || 'your catalog') + '. ' + IPTV.errorMessage(err);
       renderView();
       setTimeout(function () { UI.focus($('#search-input')); }, 20);
     });
@@ -1035,6 +1195,7 @@
     if (!(setting in Store.settings)) return;
     Store.settings[setting] = value;
     Store.saveSettings();
+    if (setting === 'textSize') applyTextSize();
     renderView();
     var target = $('#view [data-action="setting"][data-setting="' + setting + '"][data-value="' + value + '"]');
     if (target) UI.focus(target);
@@ -1067,10 +1228,10 @@
   }
 
   function clearHistory() {
-    UI.confirm('Clear resume history', 'Remove all saved playback positions? Favorites are kept.', 'Clear', true).then(function (yes) {
+    UI.confirm('Clear watch history', 'Remove all continue-watching history and saved playback positions? Favorites are kept.', 'Clear', true).then(function (yes) {
       if (!yes) return;
       Store.clearHistory();
-      UI.toast('Resume history cleared');
+      UI.toast('Watch history cleared');
     });
   }
 
@@ -1123,6 +1284,7 @@
       setTimeout(function () { App.exitArmed = false; }, 2600);
       return;
     }
+    if (App.view === 'search') { switchView(App.searchReturnView || 'live'); return; }
     if (App.view !== 'live') { switchView('live'); return; }
     if (App.exitArmed) { App.exitArmed = false; exitApp(); return; }
     App.exitArmed = true;
@@ -1192,7 +1354,8 @@
       if (!actionEl) return;
       var action = actionEl.getAttribute('data-action');
 
-      if (action === 'open-search') { switchView('search'); return; }
+      if (action === 'section-search') { openSearch(actionEl.getAttribute('data-type')); return; }
+      if (action === 'search-back') { switchView(App.searchReturnView || 'live'); return; }
       if (action === 'account-menu') { switchView('settings'); return; }
 
       if (action === 'category') {
@@ -1229,6 +1392,14 @@
       }
       if (action === 'series-detail') {
         openSeries(seriesItem(actionEl.getAttribute('data-id')));
+        return;
+      }
+      if (action === 'resume-vod') {
+        resumeVod(actionEl.getAttribute('data-id'));
+        return;
+      }
+      if (action === 'resume-series') {
+        resumeSeries(actionEl.getAttribute('data-id'));
         return;
       }
       if (action === 'fav-tab') {
@@ -1341,6 +1512,7 @@
 
   function boot() {
     Store.load();
+    applyTextSize();
     UI.init();
     Player.init();
     UI.onBack = back;

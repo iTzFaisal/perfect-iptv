@@ -232,7 +232,7 @@
       }
       UI.modal({
         title: title,
-        body: '<p style="color:#c3cbe0;font-size:17px;line-height:1.6">' + esc(message) + '</p>',
+        body: '<p class="modal-copy">' + esc(message) + '</p>',
         actions: [
           { label: 'Cancel', value: 'cancel' },
           { label: confirmLabel || 'Continue', value: 'ok', primary: !danger, danger: !!danger }
