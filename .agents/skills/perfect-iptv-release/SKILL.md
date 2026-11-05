@@ -1,6 +1,6 @@
 ---
 name: perfect-iptv-release
-description: Commit, push, version-bump, tag, and publish a new Perfect IPTV Tizen .wgt release to GitHub. Use whenever the user asks to commit, push, release, publish, ship, tag, bump the version, or build a new test .wgt for this repository, even if the request mentions only one of those steps.
+description: Commit, push, version-bump, tag, and publish a new Perfect IPTV Tizen .wgt release to GitHub. Use whenever the user asks to commit, push, release, publish, ship, tag, or bump the version for this repository. Do not use for local test-only builds; use the perfect-iptv-build skill instead.
 compatibility: Requires git, an authenticated GitHub CLI, Node.js/npm, xmllint, zip, and the repository's Playwright Google Chrome setup.
 ---
 
@@ -16,8 +16,7 @@ Prefer that workflow over creating releases by hand.
 
 - **Commit or push only:** review and commit the requested work, then push. Do
   not bump the version, tag, or publish a release.
-- **Local test build only:** bump the patch version, run the checks, and run
-  `npm run package`. Do not push a tag or publish unless asked.
+- **Local test build only:** use the `perfect-iptv-build` skill. Do not tag or publish.
 - **Release / publish / ship:** do the full flow below, including the tag push
   that triggers the release workflow.
 - If it is unclear whether the user wants a public release, ask one short
@@ -46,13 +45,31 @@ Never stage or commit `dist/`, `screenshots/`, `iptv-auth.txt`, or credentials.
 ## Bump the version
 
 Versions are **patch-only** unless the user explicitly asks for a major or minor
-bump: `1.0.5` becomes `1.0.6`, never `1.1.0` on your own initiative.
+bump: `1.0.6` becomes `1.0.7`, never `1.1.0` on your own initiative.
 
-Read the current version from `config.xml`, then update npm metadata with:
+Read the current version from `config.xml` and compare it with the latest `v*`
+tag:
+
+```sh
+VERSION=$(xmllint --xpath 'string(/*[local-name()="widget"]/@version)' config.xml)
+LATEST_TAG=$(git tag --sort=-v:refname | head -1)
+echo "config=$VERSION latest=$LATEST_TAG"
+```
+
+- If `config.xml` is already ahead of the latest tag, keep it. A previous
+  `perfect-iptv-build` skill run already claimed this unreleased version; skip
+  the bump.
+- If it matches the latest tag, bump the patch.
+- If it is behind the latest tag, use the latest tag plus one.
+
+When a bump is needed, update npm metadata with:
 
 ```sh
 npm version <new-version> --no-git-tag-version
 ```
+
+When reusing an existing unreleased version, do not run `npm version` again;
+just verify the version files are already in sync.
 
 Keep these files in sync. `config.xml`, `package.json`, `package-lock.json`,
 `js/app.js` (`VERSION`), and the Settings version fallback in
