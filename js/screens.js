@@ -13,6 +13,7 @@
   var Screens = {};
 
   var CONTINUE_CATEGORY = 'continue';
+  var RECENT_CATEGORY = 'recent';
 
   function img(api, url, name, alt) {
     return UI.img(url ? api.imageUrl(url) : '', name, alt || name);
@@ -45,7 +46,7 @@
     return '<div class="pane-state"><div class="spinner"></div><p>' + esc(label || 'Loading…') + '</p></div>';
   }
 
-  function categoriesHtml(categories, activeId, allLabel, continueType) {
+  function categoriesHtml(categories, activeId, allLabel, continueType, showRecent) {
     var list = [{ category_id: 'all', category_name: allLabel || 'All' }].concat(categories || []);
     var html = '';
     if (continueType) {
@@ -55,6 +56,14 @@
         'data-action="category" data-category="' + CONTINUE_CATEGORY + '" data-focusable>' +
         '<span class="cat-label">' + icon('history') + '<span>Continue watching</span></span>' +
         '<small>' + esc(String(continueCount)) + '</small>' +
+        '</button><div class="cat-sep"></div>';
+    }
+    if (showRecent) {
+      var recentActive = String(activeId) === RECENT_CATEGORY;
+      html += '<button class="cat-item cat-recent ' + (recentActive ? 'is-active' : '') + '" ' +
+        'data-action="category" data-category="' + RECENT_CATEGORY + '" data-focusable>' +
+        '<span class="cat-label">' + icon('clock') + '<span>Recently added</span></span>' +
+        (recentActive ? '<small>' + icon('check') + '</small>' : '') +
         '</button><div class="cat-sep"></div>';
     }
     return html + list.map(function (c) {
@@ -67,6 +76,28 @@
         '</button>';
     }).join('');
   }
+
+  function sortButton(type, sort) {
+    sort = sort || 'default';
+    return '<button class="pane-sort ' + (sort !== 'default' ? 'is-active' : '') + '" ' +
+      'data-action="sort" data-type="' + esc(type) + '" data-focusable ' +
+      'aria-label="Sort by ' + esc(IPTV.sortLabel(sort)) + '">' +
+      icon('sort') + '<span>' + esc(IPTV.sortLabel(sort, true)) + '</span></button>';
+  }
+
+  Screens.sortMenu = function (current) {
+    current = current || 'default';
+    var options = IPTV.SORT_OPTIONS.map(function (option) {
+      var active = option.value === current;
+      return '<button class="option-item ' + (active ? 'is-active' : '') + '" ' +
+        'data-modal-action="sort:' + esc(option.value) + '" data-focusable>' +
+        '<span class="option-check">' + (active ? icon('check') : '') + '</span>' +
+        '<span class="option-label">' + esc(option.label) + '</span>' +
+        '</button>';
+    }).join('');
+    return '<div class="option-list">' + options + '</div>' +
+      '<p class="option-hint">Sorting applies to the items in the selected category.</p>';
+  };
 
   function searchButton(type) {
     var label = type === 'live' ? 'Search channels' : (type === 'vod' ? 'Search movies' : 'Search series');
@@ -219,6 +250,7 @@
       '<div class="pane live-content">' +
         '<div class="pane-head"><span class="pane-title">' + (continueMode ? 'Recently watched' : 'Channels') + '</span>' +
           '<div class="pane-tools"><span class="pane-count">' + esc(count) + '</span>' +
+            (continueMode ? '' : sortButton('live', state.sort)) +
             searchButton('live') + '</div></div>' +
         '<div class="pane-body"><div class="live-grid">' + grid + '</div></div>' +
       '</div>' +
@@ -286,25 +318,30 @@
   function browseView(state, api, kind) {
     var isSeries = kind === 'series';
     var continueMode = state.categoryId === CONTINUE_CATEGORY;
+    var recentMode = state.categoryId === RECENT_CATEGORY;
     var continueType = isSeries ? 'series' : 'vod';
     var items = continueMode ? Store.continueWatching(continueType) : state.items;
+    var emptyTitle = recentMode
+      ? (isSeries ? 'No recently added series' : 'No recently added movies')
+      : (isSeries ? 'No series in this category' : 'No movies in this category');
     var grid = continueMode ? continueGrid(continueType, api) : gridOrState(state.items, state, function (item, idx) {
       return posterCard(item, kind, api, { index: idx });
-    }, isSeries ? 'series' : 'movies',
-      isSeries ? 'No series in this category' : 'No movies in this category',
+    }, isSeries ? 'series' : 'movies', emptyTitle,
       'Try another category, or refresh your catalog from Settings.');
     var count = continueMode ? String(items.length) : (state.loading ? 'Loading…' : String(state.items.length));
+    var heading = continueMode ? 'Continue watching' : (recentMode ? 'Recently added' : (isSeries ? 'Series' : 'Movies'));
     return '<div class="view-browse">' +
       '<div class="pane categories">' +
         '<div class="pane-head"><span class="pane-title">Categories</span>' +
           '<span class="pane-count">' + esc(String((state.categories || []).length)) + '</span></div>' +
         '<div class="pane-body"><div class="cat-list">' +
-          categoriesHtml(state.categories, state.categoryId, isSeries ? 'All series' : 'All movies', continueType) +
+          categoriesHtml(state.categories, state.categoryId, isSeries ? 'All series' : 'All movies', continueType, true) +
         '</div></div>' +
       '</div>' +
       '<div class="pane browse-content">' +
-        '<div class="pane-head"><span class="pane-title">' + (continueMode ? 'Continue watching' : (isSeries ? 'Series' : 'Movies')) + '</span>' +
+        '<div class="pane-head"><span class="pane-title">' + heading + '</span>' +
           '<div class="pane-tools"><span class="pane-count">' + esc(count) + '</span>' +
+            (continueMode ? '' : sortButton(continueType, state.sort)) +
             searchButton(continueType) + '</div></div>' +
         '<div class="pane-body"><div class="poster-grid">' + grid + '</div></div>' +
       '</div>' +
@@ -490,7 +527,7 @@
           '<h3>About</h3>' +
           '<p>Perfect IPTV is a media player for Xtream Codes providers. It does not include, host, or sell any channels or media.</p>' +
           '<div class="settings-rows">' +
-            settingRow('Version', appVersion || '1.0.5') +
+            settingRow('Version', appVersion || '1.0.6') +
             settingRow('Platform', 'Samsung Tizen TV') +
           '</div>' +
           '<div class="settings-actions">' +

@@ -53,6 +53,24 @@ fs.mkdirSync(OUT, { recursive: true });
   const focusAfter = await page.evaluate(() => document.activeElement && document.activeElement.getAttribute('data-id'));
   console.log('d-pad focus:', focusBefore, '->', focusAfter, focusBefore !== focusAfter ? 'ok' : 'FAILED');
 
+  // Sort options should reorder the active category without a reload.
+  await page.click('[data-action="sort"][data-type="live"]');
+  await page.waitForSelector('#modal-root .option-item', { timeout: 10000 });
+  console.log('sort options:', await page.locator('#modal-root .option-item').count());
+  await page.click('[data-modal-action="sort:name-asc"]');
+  await page.waitForTimeout(400);
+  console.log('live A-Z first:', await page.locator('.channel-card .channel-name').first().textContent());
+  await page.click('[data-action="sort"][data-type="live"]');
+  await page.waitForSelector('#modal-root .option-item', { timeout: 10000 });
+  await page.click('[data-modal-action="sort:recent"]');
+  await page.waitForTimeout(400);
+  console.log('live newest first:', await page.locator('.channel-card .channel-name').first().textContent());
+  await page.click('[data-action="sort"][data-type="live"]');
+  await page.waitForSelector('#modal-root .option-item', { timeout: 10000 });
+  await page.click('[data-modal-action="sort:default"]');
+  await page.waitForTimeout(400);
+  console.log('live default first:', await page.locator('.channel-card .channel-name').first().textContent());
+
   await page.click('[data-action="open-epg"]');
   await page.waitForSelector('.epg-row', { timeout: 15000 });
   await page.waitForTimeout(400);
@@ -88,6 +106,29 @@ fs.mkdirSync(OUT, { recursive: true });
   await page.screenshot({ path: path.join(OUT, '03-movies.png') });
   console.log('movies:', await page.locator('.poster-card').count());
 
+  // Recently added uses provider timestamps; sorting applies to that list.
+  await page.click('[data-action="category"][data-category="recent"]');
+  await page.waitForSelector('.poster-card', { timeout: 15000 });
+  await page.waitForTimeout(500);
+  console.log('recent movies first:', await page.locator('.poster-title').first().textContent());
+  await page.click('[data-action="sort"][data-type="vod"]');
+  await page.waitForSelector('#modal-root .option-item', { timeout: 10000 });
+  await page.click('[data-modal-action="sort:name-asc"]');
+  await page.waitForTimeout(400);
+  console.log('movies A-Z first:', await page.locator('.poster-title').first().textContent());
+  await page.click('[data-action="sort"][data-type="vod"]');
+  await page.waitForSelector('#modal-root .option-item', { timeout: 10000 });
+  await page.click('[data-modal-action="sort:name-desc"]');
+  await page.waitForTimeout(400);
+  console.log('movies Z-A first:', await page.locator('.poster-title').first().textContent());
+  await page.click('[data-action="sort"][data-type="vod"]');
+  await page.waitForSelector('#modal-root .option-item', { timeout: 10000 });
+  await page.click('[data-modal-action="sort:default"]');
+  await page.waitForTimeout(300);
+  await page.click('[data-action="category"][data-category="all"]');
+  await page.waitForSelector('.poster-card', { timeout: 15000 });
+  await page.waitForTimeout(300);
+
   // Movies search is scoped to movies only.
   await page.click('[data-action="section-search"][data-type="vod"]');
   await page.waitForSelector('#search-input');
@@ -111,6 +152,21 @@ fs.mkdirSync(OUT, { recursive: true });
   await page.waitForSelector('.poster-card', { timeout: 15000 });
 
   await page.click('.nav-item[data-view="series"]');
+  await page.waitForSelector('.poster-card', { timeout: 15000 });
+  await page.click('[data-action="category"][data-category="recent"]');
+  await page.waitForSelector('.poster-card', { timeout: 15000 });
+  await page.waitForTimeout(500);
+  console.log('recent series first:', await page.locator('.poster-title').first().textContent());
+  await page.click('[data-action="sort"][data-type="series"]');
+  await page.waitForSelector('#modal-root .option-item', { timeout: 10000 });
+  await page.click('[data-modal-action="sort:name-asc"]');
+  await page.waitForTimeout(400);
+  console.log('series A-Z first:', await page.locator('.poster-title').first().textContent());
+  await page.click('[data-action="sort"][data-type="series"]');
+  await page.waitForSelector('#modal-root .option-item', { timeout: 10000 });
+  await page.click('[data-modal-action="sort:default"]');
+  await page.waitForTimeout(300);
+  await page.click('[data-action="category"][data-category="all"]');
   await page.waitForSelector('.poster-card', { timeout: 15000 });
   await page.click('[data-action="section-search"][data-type="series"]');
   await page.waitForSelector('#search-input');

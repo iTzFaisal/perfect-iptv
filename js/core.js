@@ -96,6 +96,81 @@
     return fmtDate(ms);
   }
 
+  /* ---------------- Catalog sorting ---------------- */
+
+  var SORT_OPTIONS = [
+    { value: 'default', label: 'Default order', short: 'Sort' },
+    { value: 'name-asc', label: 'Name A–Z', short: 'Sort: A–Z' },
+    { value: 'name-desc', label: 'Name Z–A', short: 'Sort: Z–A' },
+    { value: 'recent', label: 'Recently added', short: 'Sort: Newest' }
+  ];
+
+  function toTimestampMs(value) {
+    if (value == null || value === '') return 0;
+    if (typeof value === 'number') {
+      return value > 100000000000 ? value : value * 1000;
+    }
+    var raw = String(value).trim();
+    if (!raw) return 0;
+    if (/^\d+(\.\d+)?$/.test(raw)) {
+      var n = Number(raw);
+      return n > 100000000000 ? n : n * 1000;
+    }
+    var parsed = Date.parse(raw.replace(' ', 'T'));
+    return isNaN(parsed) ? 0 : parsed;
+  }
+
+  function itemAddedMs(item, type) {
+    if (!item) return 0;
+    if (type === 'series') {
+      return toTimestampMs(item.last_modified || item.lastModified || item.added || item.added_at);
+    }
+    return toTimestampMs(item.added || item.added_at);
+  }
+
+  function compareNames(a, b) {
+    a = String(a || '');
+    b = String(b || '');
+    try {
+      return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
+    } catch (err) {
+      a = a.toLowerCase();
+      b = b.toLowerCase();
+      return a < b ? -1 : (a > b ? 1 : 0);
+    }
+  }
+
+  // Stable client-side sort. Providers return the whole catalog in their own
+  // order; Xtream has no standard sort/recently-added parameters.
+  function sortCatalog(items, sort, type) {
+    var list = Array.isArray(items) ? items : [];
+    if (!sort || sort === 'default') return list;
+    var indexed = list.map(function (item, index) {
+      return {
+        item: item,
+        index: index,
+        name: (item && (item.name || item.title)) || '',
+        added: itemAddedMs(item, type)
+      };
+    });
+    indexed.sort(function (a, b) {
+      if (sort === 'name-asc' || sort === 'name-desc') {
+        var nameOrder = compareNames(a.name, b.name);
+        return (sort === 'name-desc' ? -nameOrder : nameOrder) || (a.index - b.index);
+      }
+      if (sort === 'recent') {
+        return (b.added - a.added) || (a.index - b.index);
+      }
+      return a.index - b.index;
+    });
+    return indexed.map(function (entry) { return entry.item; });
+  }
+
+  function sortLabel(value, short) {
+    var option = SORT_OPTIONS.find(function (entry) { return entry.value === value; }) || SORT_OPTIONS[0];
+    return short ? option.short : option.label;
+  }
+
   function b64Decode(value) {
     if (!value) return '';
     try {
@@ -859,6 +934,10 @@
   IPTV.fmtPosition = fmtPosition;
   IPTV.fmtDate = fmtDate;
   IPTV.fmtAgo = fmtAgo;
+  IPTV.SORT_OPTIONS = SORT_OPTIONS;
+  IPTV.sortCatalog = sortCatalog;
+  IPTV.sortLabel = sortLabel;
+  IPTV.itemAddedMs = itemAddedMs;
   IPTV.b64Decode = b64Decode;
   IPTV.normalizeServer = normalizeServer;
   IPTV.parseProviderInput = parseProviderInput;

@@ -13,6 +13,10 @@ EPG and a remote-first player, running entirely on a Samsung TV.
   provider publishes guide data
 - **Movies and series** with categories, posters, plots, cast, seasons and
   episodes
+- **Recently added** in Movies and Series, derived from the provider’s catalog
+  timestamps (the 200 newest movies or series are shown)
+- **Sorting** in Live TV, Movies and Series: default provider order, name A–Z,
+  name Z–A, or recently added
 - **Search inside each section** — Live TV, Movies and Series each have their
   own search with results that update as you type, so results never mix
   channels with movies or series
@@ -98,7 +102,7 @@ npm install
 npm run package
 ```
 
-This produces `dist/PerfectIPTV-1.0.5.wgt`.
+This produces `dist/PerfectIPTV-1.0.6.wgt`.
 
 To sign it with a Tizen Studio certificate profile instead:
 
@@ -106,7 +110,7 @@ To sign it with a Tizen Studio certificate profile instead:
 TIZEN_PROFILE=YOUR_PROFILE npm run package
 ```
 
-That produces `dist/PerfectIPTV-1.0.5-signed.wgt`. You can also re-sign the
+That produces `dist/PerfectIPTV-1.0.6-signed.wgt`. You can also re-sign the
 unsigned file manually; see Option B below.
 
 ### Optional proxy deployment
@@ -168,7 +172,7 @@ TV, re-signs packages for you, and gives you a phone interface for installing
    screen. Open that address on your phone and pair.
 
 5. In the phone interface, open **Upload** and choose
-   `dist/PerfectIPTV-1.0.5.wgt`. Tizen Homebrew re-signs it for your TV and
+   `dist/PerfectIPTV-1.0.6.wgt`. Tizen Homebrew re-signs it for your TV and
    installs it.
 
 6. Perfect IPTV now appears in the TV’s app list.
@@ -200,8 +204,8 @@ on your TV.
 
    ```sh
    mkdir -p dist/signed
-   cp dist/PerfectIPTV-1.0.5.wgt dist/signed/
-   tizen package -t wgt -s YOUR_PROFILE --output dist/signed -- dist/signed/PerfectIPTV-1.0.5.wgt
+   cp dist/PerfectIPTV-1.0.6.wgt dist/signed/
+   tizen package -t wgt -s YOUR_PROFILE --output dist/signed -- dist/signed/PerfectIPTV-1.0.6.wgt
    ```
 
    Or build the signed package directly:
@@ -210,28 +214,28 @@ on your TV.
    TIZEN_PROFILE=YOUR_PROFILE npm run package
    ```
 
-   This produces `dist/PerfectIPTV-1.0.5-signed.wgt`. If you use this path,
+   This produces `dist/PerfectIPTV-1.0.6-signed.wgt`. If you use this path,
    install that file from `dist/` instead of the re-signed copy in `dist/signed/`.
 
 5. Connect to the TV and install the **signed** package:
 
    ```sh
    sdb connect YOUR_TV_IP:26101
-   tizen install -n PerfectIPTV-1.0.5.wgt -s YOUR_TV_IP:26101 -- dist/signed
+   tizen install -n PerfectIPTV-1.0.6.wgt -s YOUR_TV_IP:26101 -- dist/signed
    tizen run -p iTzFaisal1 -s YOUR_TV_IP:26101
    ```
 
    Or use the helper:
 
    ```sh
-   scripts/deploy.sh YOUR_TV_IP dist/signed/PerfectIPTV-1.0.5.wgt
+   scripts/deploy.sh YOUR_TV_IP dist/signed/PerfectIPTV-1.0.6.wgt
    ```
 
 If your firmware rejects `tizen install`, see the field guide
 [Sideloading an IPTV App onto a Retail Samsung Smart TV](https://github.com/AscendedStarr/samsung-tv-iptv-guide)
 for the `vd_appinstall` path and certificate/DUID details.
 
-A retail TV will not accept the unsigned `dist/PerfectIPTV-1.0.5.wgt`
+A retail TV will not accept the unsigned `dist/PerfectIPTV-1.0.6.wgt`
 directly. It must be signed for that TV. That is what Tizen Homebrew or Tizen
 Studio does.
 
@@ -277,7 +281,7 @@ that script on the TV.
 npm test              # full Playwright UI flow with the mock provider
 npm run test:native   # CORS-blocked provider + emulated Tizen downloader
 npm run test:real     # optional real-provider smoke test
-npm run package       # build dist/PerfectIPTV-1.0.5.wgt
+npm run package       # build dist/PerfectIPTV-1.0.6.wgt
 ```
 
 `npm run test:real` reads `iptv-auth.txt` (gitignored) and expects the local
@@ -308,7 +312,7 @@ proxy/
   worker.mjs             Cloudflare Worker CORS proxy
   server.js              Local Node CORS proxy
 scripts/
-  package.sh             Build dist/PerfectIPTV-1.0.5.wgt
+  package.sh             Build dist/PerfectIPTV-1.0.6.wgt
   deploy.sh              sdb/tizen install helper
   test-ui.js             Playwright UI flow
   test-native.js         Native-downloader fallback test
@@ -336,6 +340,11 @@ dist/                    Generated package (not committed)
 - Search updates live as you type. It downloads only the catalog for the
   section you are searching (live, movies, or series) once per session and
   filters locally, because Xtream has no standard search endpoint.
+- **Recently added** and the **Recently added** sort order use the timestamps
+  Xtream already returns: `added` for live channels and movies, and
+  `last_modified` for series. There is no standard “recent” endpoint, so the app
+  requests the section catalog once, sorts locally, and keeps it cached for
+  search. The Recently added category shows the 200 newest items.
 - Watch history powers **Continue watching**. Live TV stores recently watched
   channels; movies and episodes store their last playback position. History can
   be cleared from **Settings → Display**.

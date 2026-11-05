@@ -12,20 +12,26 @@
   var Screens = IPTV.Screens;
   var Player = IPTV.Player;
 
-  var VERSION = '1.0.5';
+  var VERSION = '1.0.6';
   var CONTINUE_CATEGORY = 'continue';
+  var RECENT_CATEGORY = 'recent';
+  var RECENT_LIMIT = 200;
   var SEARCH_LABELS = { live: 'Live TV', vod: 'Movies', series: 'Series' };
   var TEXT_SIZES = { standard: 1.25, large: 1.5, xlarge: 1.7 };
 
   function freshLive() {
     return {
-      categories: [], categoryId: 'all', items: [], loading: false, error: null,
+      categories: [], categoryId: 'all', items: [], rawItems: [], sort: 'default',
+      loadingText: '', loading: false, error: null,
       limit: 120, selectedId: null, epg: null, epgLoading: false,
       loadedCategory: null, token: 0
     };
   }
   function freshVod() {
-    return { categories: [], categoryId: 'all', items: [], loading: false, error: null, limit: 120, loadedCategory: null, token: 0 };
+    return {
+      categories: [], categoryId: 'all', items: [], rawItems: [], sort: 'default',
+      loadingText: '', loading: false, error: null, limit: 120, loadedCategory: null, token: 0
+    };
   }
 
   var App = {
@@ -355,6 +361,23 @@
     });
   }
 
+  function sectionState(type) {
+    if (type === 'live') return App.state.live;
+    if (type === 'vod' || type === 'movies') return App.state.vod;
+    if (type === 'series') return App.state.series;
+    return null;
+  }
+
+  function applyCatalogSort(state, type) {
+    state.items = IPTV.sortCatalog(state.rawItems || [], state.sort, type);
+  }
+
+  function recentCatalog(type) {
+    return ensureCatalog(type).then(function (list) {
+      return IPTV.sortCatalog(list, 'recent', type).slice(0, RECENT_LIMIT);
+    });
+  }
+
   /* ---------------- View rendering ---------------- */
 
   function renderView() {
@@ -455,8 +478,10 @@
     }
     state.categoryId = categoryId;
     state.loading = true;
+    state.loadingText = 'Loading channels…';
     state.error = null;
     state.items = [];
+    state.rawItems = [];
     state.selectedId = null;
     state.epg = null;
     state.epgLoading = false;
@@ -467,7 +492,8 @@
 
     return App.api.getLiveStreams(categoryId).then(function (items) {
       if (token !== state.token) return;
-      state.items = items || [];
+      state.rawItems = items || [];
+      applyCatalogSort(state, 'live');
       state.loading = false;
       state.loadedCategory = categoryId;
       renderView();
@@ -476,6 +502,7 @@
       if (token !== state.token) return;
       state.loading = false;
       state.items = [];
+      state.rawItems = [];
       state.error = IPTV.errorMessage(err);
       renderView();
       setTimeout(focusFirstView, 20);
@@ -727,16 +754,24 @@
     }
     state.categoryId = categoryId;
     state.loading = true;
+    state.loadingText = categoryId === RECENT_CATEGORY
+      ? 'Loading recently added movies…' : 'Loading movies…';
     state.error = null;
     state.items = [];
+    state.rawItems = [];
     state.limit = 120;
     state.loadedCategory = null;
     var token = ++state.token;
     renderView();
 
-    return App.api.getVodStreams(categoryId).then(function (items) {
+    var loader = categoryId === RECENT_CATEGORY
+      ? recentCatalog('vod')
+      : App.api.getVodStreams(categoryId);
+
+    return loader.then(function (items) {
       if (token !== state.token) return;
-      state.items = items || [];
+      state.rawItems = items || [];
+      applyCatalogSort(state, 'vod');
       state.loading = false;
       state.loadedCategory = categoryId;
       renderView();
@@ -744,6 +779,8 @@
     }).catch(function (err) {
       if (token !== state.token) return;
       state.loading = false;
+      state.items = [];
+      state.rawItems = [];
       state.error = IPTV.errorMessage(err);
       renderView();
       setTimeout(focusFirstView, 20);
@@ -872,16 +909,24 @@
     }
     state.categoryId = categoryId;
     state.loading = true;
+    state.loadingText = categoryId === RECENT_CATEGORY
+      ? 'Loading recently added series…' : 'Loading series…';
     state.error = null;
     state.items = [];
+    state.rawItems = [];
     state.limit = 120;
     state.loadedCategory = null;
     var token = ++state.token;
     renderView();
 
-    return App.api.getSeries(categoryId).then(function (items) {
+    var loader = categoryId === RECENT_CATEGORY
+      ? recentCatalog('series')
+      : App.api.getSeries(categoryId);
+
+    return loader.then(function (items) {
       if (token !== state.token) return;
-      state.items = items || [];
+      state.rawItems = items || [];
+      applyCatalogSort(state, 'series');
       state.loading = false;
       state.loadedCategory = categoryId;
       renderView();
@@ -889,6 +934,8 @@
     }).catch(function (err) {
       if (token !== state.token) return;
       state.loading = false;
+      state.items = [];
+      state.rawItems = [];
       state.error = IPTV.errorMessage(err);
       renderView();
       setTimeout(focusFirstView, 20);
@@ -1219,6 +1266,47 @@
     }, immediate ? 0 : 220);
   }
 
+  /* ---------------- Sorting ---------------- */
+
+  function focusSort(type) {
+    var btn = $('#view [data-action="sort"][data-type="' + type + '"]');
+    if (btn) UI.focus(btn);
+  }
+
+  function setSort(type, sort) {
+    var state = sectionState(type);
+    var valid = IPTV.SORT_OPTIONS.some(function (entry) { return entry.value === sort; });
+    if (!state || !valid) return;
+    if (state.sort === sort) { focusSort(type); return; }
+    var catalogType = type === 'movies' ? 'vod' : type;
+    state.sort = sort;
+    state.limit = 120;
+    applyCatalogSort(state, catalogType);
+    renderView();
+    focusSort(type);
+  }
+
+  function openSort(type) {
+    var state = sectionState(type);
+    if (!state) return;
+    var title = type === 'live' ? 'Live TV' : (type === 'vod' ? 'Movies' : 'Series');
+    var current = state.sort || 'default';
+    UI.modal({
+      eyebrow: 'Sort',
+      title: 'Sort ' + title,
+      body: Screens.sortMenu(current),
+      actions: [{ label: 'Close', value: 'close' }],
+      autofocusSelector: '[data-modal-action="sort:' + current + '"]',
+      onAction: function (value) {
+        if (value === 'close') { UI.closeModal(); return; }
+        var match = /^sort:([a-z-]+)$/.exec(String(value || ''));
+        if (!match) return;
+        UI.closeModal();
+        setSort(type, match[1]);
+      }
+    });
+  }
+
   /* ---------------- Settings actions ---------------- */
 
   function setSetting(setting, value) {
@@ -1385,6 +1473,7 @@
       var action = actionEl.getAttribute('data-action');
 
       if (action === 'section-search') { openSearch(actionEl.getAttribute('data-type')); return; }
+      if (action === 'sort') { openSort(actionEl.getAttribute('data-type')); return; }
       if (action === 'account-menu') { switchView('settings'); return; }
 
       if (action === 'category') {
