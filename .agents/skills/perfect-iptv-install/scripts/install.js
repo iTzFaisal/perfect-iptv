@@ -6,35 +6,47 @@
  *   node .agents/skills/perfect-iptv-install/scripts/install.js \
  *     --url http://192.168.1.133:8091
  *
- * The PIN comes from HB_PIN and is never printed. The TV's Homebrew page
- * re-signs the unsigned package for that TV, so this works without Tizen Studio.
+ * The PIN comes from HB_PIN or the last successful local cache and is never
+ * printed. The TV's Homebrew page re-signs the unsigned package for that TV,
+ * so this works without Tizen Studio.
  *
- * Exit codes: 0 installed, 1 preflight, 2 TV rejected, 3 pairing, 4 timeout.
+ * Exit codes: 0 installed, 1 preflight, 2 TV rejected, 3 pairing, 4 timeout,
+ *             5 pairing required (no PIN supplied).
  */
 const { chromium } = require('playwright');
 const { execFileSync } = require('node:child_process');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 
 const ROOT = path.resolve(__dirname, '../../../..');
+// Last known TV address. DHCP can change it, so callers may override --url.
 const DEFAULT_URL = 'http://192.168.1.133:8091';
 const EXPECTED_PACKAGE = 'iTzFaisal1';
 const EXPECTED_APP_ID = 'iTzFaisal1.PerfectIPTV';
 const INSTALL_TIMEOUT_MS = 5 * 60 * 1000;
+// Homebrew stores its last successful PIN under this localStorage key.
+const PIN_STORAGE_KEY = 'tizen-homebrew.pin';
+// Keep the remembered PIN outside the repo, readable only by this user.
+const PIN_FILE = path.join(os.homedir(), '.config', 'perfect-iptv', 'homebrew-pin');
 
 function usage() {
   console.log([
     'Usage: node .agents/skills/perfect-iptv-install/scripts/install.js [options]',
     '',
     'Options:',
-    '  --url <url>    Tizen Homebrew address shown on the TV (default ' + DEFAULT_URL + ')',
+    '  --url <url>    Tizen Homebrew address shown on the TV (last known: ' + DEFAULT_URL + ')',
     '  --wgt <file>   package to install (default dist/PerfectIPTV-<config version>.wgt)',
     '  --dry-run      check the TV page and the package, do not pair or install',
     '  --help         show this help',
     '',
     'Environment:',
-    '  HB_PIN         six-digit PIN shown on the TV; required unless --dry-run'
+    '  HB_PIN         six-digit PIN shown on the TV; overrides the remembered PIN',
+    '',
+    'The last successful PIN is remembered at:',
+    '  ' + PIN_FILE,
+    'and offered automatically while the TV keeps the same PIN.'
   ].join('\n'));
 }
 
@@ -122,7 +134,39 @@ function pkgLine(pkg) {
   return pkg.name + ' ' + pkg.version + ' (' + pkg.packageId + ', ' + Math.round(pkg.size / 1024) + ' KB)';
 }
 
-async function runInstall(opts, pin, pkg) {
+function readSavedPin() {
+  try {
+    const pin = fs.readFileSync(PIN_FILE, 'utf8').trim();
+    return /^\d{6}$/.test(pin) ? pin : '';
+  } catch (err) {
+    return '';
+  }
+}
+
+function savePin(pin) {
+  if (!/^\d{6}$/.test(pin)) return;
+  try {
+    const dir = path.dirname(PIN_FILE);
+    fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+    try { fs.chmodSync(dir, 0o700); } catch (err) { /* best effort */ }
+    fs.writeFileSync(PIN_FILE, pin + '\n', { mode: 0o600 });
+    try { fs.chmodSync(PIN_FILE, 0o600); } catch (err) { /* best effort */ }
+  } catch (err) {
+    console.error('WARNING: could not remember the PIN for future runs: ' + err.message);
+  }
+}
+
+function forgetPin() {
+  try {
+    fs.unlinkSync(PIN_FILE);
+  } catch (err) {
+    if (err.code !== 'ENOENT') {
+      console.error('WARNING: could not remove the saved PIN: ' + err.message);
+    }
+  }
+}
+
+async function runInstall(opts, pin, source, pkg) {
   const screenshot = path.join(ROOT, 'screenshots', 'homebrew-install-' + pkg.version + '.png');
   fs.mkdirSync(path.dirname(screenshot), { recursive: true });
 
@@ -130,12 +174,46 @@ async function runInstall(opts, pin, pkg) {
   const page = await (await browser.newContext({ viewport: { width: 1280, height: 900 } })).newPage();
   page.on('pageerror', (err) => console.error('[page] ' + err.message));
 
+  if (source === 'saved' && pin) {
+    await page.addInitScript(function (args) {
+      try { window.localStorage.setItem(args.key, args.pin); } catch (err) { /* ignore */ }
+    }, { key: PIN_STORAGE_KEY, pin: pin });
+  }
+
   try {
+    if (source === 'saved') {
+      console.log('Offering the last successful PIN from this computer (not printed).');
+    }
     console.log('Opening ' + opts.url + ' ...');
     await page.goto(opts.url, { waitUntil: 'networkidle', timeout: 30000 });
     await page.waitForSelector('#pin, button[data-focus="tab:upload"]', { timeout: 15000 });
 
-    if (await page.locator('#pin').count()) {
+    const uploadVisible = await page.locator('button[data-focus="tab:upload"]')
+      .isVisible().catch(() => false);
+    const pinVisible = await page.locator('#pin').isVisible().catch(() => false);
+
+    if (uploadVisible) {
+      console.log(source === 'saved'
+        ? 'TV is paired; the remembered PIN was accepted.'
+        : 'TV is already paired; no PIN needed.');
+    } else if (pinVisible) {
+      if (source === 'saved') {
+        const fault = page.locator('#status .state-fault').first();
+        if (await fault.count()) {
+          const message = (await fault.innerText()).replace(/\s+/g, ' ').trim();
+          forgetPin();
+          console.error('SAVED PIN REJECTED: ' + (message || 'the TV no longer accepts the last PIN.'));
+          console.error('The TV or Homebrew probably restarted, so its PIN changed. ' +
+            'The stale PIN was forgotten; ask for the current PIN and rerun with HB_PIN.');
+          return 5;
+        }
+        console.log('The saved PIN was not offered automatically; trying it once.');
+      }
+      if (!/^\d{6}$/.test(pin)) {
+        console.error('PAIRING REQUIRED: this TV needs the 6-digit PIN shown on Tizen Homebrew.');
+        console.error('Ask for the current PIN, then rerun with HB_PIN set. Not guessing.');
+        return 5;
+      }
       console.log('Pairing with the PIN from the TV (one attempt)...');
       await page.fill('#pin', pin);
       const paired = await Promise.race([
@@ -145,6 +223,7 @@ async function runInstall(opts, pin, pkg) {
 
       if (paired === false) {
         const message = (await page.locator('#status').innerText()).replace(/\s+/g, ' ').trim();
+        forgetPin();
         await page.screenshot({ path: screenshot, fullPage: true });
         console.error('PAIRING FAILED: ' + message);
         console.error('The PIN is wrong, stale, or pairing is locked. Restart Tizen Homebrew, ' +
@@ -156,7 +235,12 @@ async function runInstall(opts, pin, pkg) {
         console.error('PAIRING TIMED OUT: the TV did not respond to the PIN.');
         return 4;
       }
-      console.log('Paired.');
+      savePin(pin);
+      console.log('Paired and remembered for future runs.');
+    } else {
+      console.error('Could not find the Homebrew upload screen or PIN field on the TV page.');
+      console.error('Ask the user for the address shown on the TV, then rerun with --url.');
+      return 1;
     }
 
     console.log('Uploading ' + pkgLine(pkg) + ' ...');
@@ -235,12 +319,11 @@ async function runInstall(opts, pin, pkg) {
     return 0;
   }
 
-  const pin = process.env.HB_PIN || '';
-  if (!/^\d{6}$/.test(pin)) {
-    fail('set HB_PIN to the 6-digit PIN shown on the TV (do not guess).', 1);
-  }
-
-  return runInstall(opts, pin, pkg);
+  const envPin = (process.env.HB_PIN || '').trim();
+  const savedPin = readSavedPin();
+  const pin = envPin || savedPin;
+  const source = envPin ? 'env' : (savedPin ? 'saved' : '');
+  return runInstall(opts, pin, source, pkg);
 })().then((code) => process.exit(code)).catch((err) => {
   console.error('ERROR: ' + (err && err.stack ? err.stack : err));
   process.exit(1);
