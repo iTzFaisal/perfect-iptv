@@ -102,7 +102,7 @@ npm install
 npm run package
 ```
 
-This produces `dist/PerfectIPTV-1.1.0.wgt`.
+This produces `dist/PerfectIPTV-1.1.1.wgt`.
 
 To sign it with a Tizen Studio certificate profile instead:
 
@@ -110,7 +110,7 @@ To sign it with a Tizen Studio certificate profile instead:
 TIZEN_PROFILE=YOUR_PROFILE npm run package
 ```
 
-That produces `dist/PerfectIPTV-1.1.0-signed.wgt`. You can also re-sign the
+That produces `dist/PerfectIPTV-1.1.1-signed.wgt`. You can also re-sign the
 unsigned file manually; see Option B below.
 
 ### Optional proxy deployment
@@ -172,7 +172,7 @@ TV, re-signs packages for you, and gives you a phone interface for installing
    screen. Open that address on your phone and pair.
 
 5. In the phone interface, open **Upload** and choose
-   `dist/PerfectIPTV-1.1.0.wgt`. Tizen Homebrew re-signs it for your TV and
+   `dist/PerfectIPTV-1.1.1.wgt`. Tizen Homebrew re-signs it for your TV and
    installs it.
 
 6. Perfect IPTV now appears in the TV’s app list.
@@ -204,8 +204,8 @@ on your TV.
 
    ```sh
    mkdir -p dist/signed
-   cp dist/PerfectIPTV-1.1.0.wgt dist/signed/
-   tizen package -t wgt -s YOUR_PROFILE --output dist/signed -- dist/signed/PerfectIPTV-1.1.0.wgt
+   cp dist/PerfectIPTV-1.1.1.wgt dist/signed/
+   tizen package -t wgt -s YOUR_PROFILE --output dist/signed -- dist/signed/PerfectIPTV-1.1.1.wgt
    ```
 
    Or build the signed package directly:
@@ -214,28 +214,28 @@ on your TV.
    TIZEN_PROFILE=YOUR_PROFILE npm run package
    ```
 
-   This produces `dist/PerfectIPTV-1.1.0-signed.wgt`. If you use this path,
+   This produces `dist/PerfectIPTV-1.1.1-signed.wgt`. If you use this path,
    install that file from `dist/` instead of the re-signed copy in `dist/signed/`.
 
 5. Connect to the TV and install the **signed** package:
 
    ```sh
    sdb connect YOUR_TV_IP:26101
-   tizen install -n PerfectIPTV-1.1.0.wgt -s YOUR_TV_IP:26101 -- dist/signed
+   tizen install -n PerfectIPTV-1.1.1.wgt -s YOUR_TV_IP:26101 -- dist/signed
    tizen run -p iTzFaisal1 -s YOUR_TV_IP:26101
    ```
 
    Or use the helper:
 
    ```sh
-   scripts/deploy.sh YOUR_TV_IP dist/signed/PerfectIPTV-1.1.0.wgt
+   scripts/deploy.sh YOUR_TV_IP dist/signed/PerfectIPTV-1.1.1.wgt
    ```
 
 If your firmware rejects `tizen install`, see the field guide
 [Sideloading an IPTV App onto a Retail Samsung Smart TV](https://github.com/AscendedStarr/samsung-tv-iptv-guide)
 for the `vd_appinstall` path and certificate/DUID details.
 
-A retail TV will not accept the unsigned `dist/PerfectIPTV-1.1.0.wgt`
+A retail TV will not accept the unsigned `dist/PerfectIPTV-1.1.1.wgt`
 directly. It must be signed for that TV. That is what Tizen Homebrew or Tizen
 Studio does.
 
@@ -342,7 +342,7 @@ scripts/
   check.sh               Fast static gate
   check-version.js       Version sync check
   check-manifest.js      index.html script order check
-  package.sh             Build dist/PerfectIPTV-1.1.0.wgt
+  package.sh             Build dist/PerfectIPTV-1.1.1.wgt
   deploy.sh              sdb/tizen install helper
   test-ui.js             Playwright UI flow with assertions
   test-native.js         Native-downloader fallback test

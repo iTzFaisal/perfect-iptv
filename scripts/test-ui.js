@@ -54,6 +54,7 @@ function expandSelection(selected) {
 
 let page;
 let playedLive = null;
+const errors = [];
 
 /* ---------------- Page helpers ---------------- */
 
@@ -137,7 +138,12 @@ async function waitForSection(type, category) {
 /* ---------------- Steps ---------------- */
 
 step('login', async () => {
-  await page.goto(BASE, { waitUntil: 'networkidle' });
+  // Start from a clean TV state even if the browser profile survived a
+  // previous run, then wait for boot instead of reading the DOM too early.
+  await page.goto(BASE, { waitUntil: 'domcontentloaded' });
+  await page.evaluate(() => window.localStorage.clear());
+  await page.reload({ waitUntil: 'networkidle' });
+  await page.waitForSelector('#login-screen:not(.hidden)', { timeout: 20000 });
   assert.equal(await page.locator('#login-screen').isVisible(), true, 'login screen should be visible');
   assert.equal(await page.locator('#shell').isVisible(), false, 'shell should be hidden before login');
   assert.equal(await page.evaluate(() =>
@@ -653,7 +659,6 @@ step('saved-account', ['logout'], async () => {
   const context = await browser.newContext({ viewport: { width: 1920, height: 1080 } });
   page = await context.newPage();
 
-  const errors = [];
   page.on('pageerror', (err) => errors.push('PAGE: ' + err.message));
   page.on('console', (msg) => {
     if (msg.type() === 'error' && !msg.text().includes('$WEBAPIS') && !msg.text().includes('favicon')) {
@@ -683,5 +688,6 @@ step('saved-account', ['logout'], async () => {
   console.log('UI TESTS PASSED');
 })().catch((err) => {
   console.error('\nTEST FAILED:', err && err.stack ? err.stack : err);
+  if (errors.length) console.error('\nBrowser errors:\n' + errors.join('\n'));
   process.exit(1);
 });
