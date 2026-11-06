@@ -531,8 +531,10 @@
           '<h3>About</h3>' +
           '<p>Perfect IPTV is a media player for Xtream Codes providers. It does not include, host, or sell any channels or media.</p>' +
           '<div class="settings-rows">' +
-            settingRow('Version', appVersion || '0.1.1') +
+            settingRow('Version', appVersion || '0.1.2') +
             settingRow('Platform', 'Samsung Tizen TV') +
+            settingRow('Developer', 'iTzFaisal') +
+            settingRow('GitHub Repo', 'iTzFaisal/perfect-iptv') +
           '</div>' +
           '<div class="settings-actions">' +
             '<button class="btn btn-ghost btn-sm" data-action="add-account" data-focusable>' + icon('plus') + 'Add another account</button>' +

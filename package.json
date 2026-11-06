@@ -1,6 +1,6 @@
 {
   "name": "perfect-iptv",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "description": "A native Samsung Tizen TV IPTV player for Xtream Codes providers.",
   "scripts": {
