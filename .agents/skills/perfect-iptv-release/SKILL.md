@@ -88,29 +88,33 @@ The only acceptable old-version hit is the historical example in `AGENTS.md`.
 
 ## Verify before committing
 
-Run the project checks from the repository root:
+Run the fast gates from the repository root:
 
 ```sh
-for f in js/*.js; do node --check "$f"; done
-xmllint --noout config.xml
+npm run check
+npm run test:unit
 ```
 
-Run both UI suites. `npm test` and `npm run test:native` expect the mock provider
-at `http://localhost:4173`, so start it in a separate shell:
+`npm run check` verifies JS syntax, XML, version sync, script order, and
+whitespace. Both fast gates must pass before committing.
+
+The browser suites expect the mock provider at `http://localhost:4173`, so start
+it in a separate shell:
 
 ```sh
 npm run serve
 ```
 
-Then:
+Then run the full verification ladder:
 
 ```sh
-npm test
-npm run test:native
+npm run verify
 ```
 
-Stop the mock server when finished. Fix failures before committing or tagging;
-the release workflow runs the same suites and will reject a broken tag.
+`npm run verify` runs static checks, unit tests, the full UI suite, and the
+native-downloader suite. Stop the mock server when finished. Fix failures before
+committing or tagging; the release workflow runs the same suites and will reject
+a broken tag.
 
 ## Build the package
 

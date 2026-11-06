@@ -8,40 +8,56 @@ only; do not build or port it.
 
 - `npm install` once. Playwright is the only dev dependency.
 - `npm run serve` — mock Xtream provider + static server at
-  `http://localhost:4173`; log in with `demo` / `demo`. Required before tests.
-- `npm test` — Playwright UI flow. Uses installed Google Chrome
-  (`channel: 'chrome'`) and writes `screenshots/`.
+  `http://localhost:4173`; log in with `demo` / `demo`. Required before browser
+  tests.
+- `npm run check` — L1 static gate: JS syntax, XML, version sync, script
+  manifest, whitespace. Run after every edit.
+- `npm run test:unit` — L2 `node:test` suite for `js/lib/*`.
+- `npm run test:smoke` — L3 login, live, one playback, reload.
+- `npm test` — L4 full Playwright UI flow. Uses installed Google Chrome
+  (`channel: 'chrome'`) and writes `screenshots/`. `ONLY=step` selects one step
+  plus dependencies; `SMOKE=1` is the same as `test:smoke`.
 - `npm run test:native` — simulates a CORS-blocked provider and the Tizen
   `tizen.download` + `tizen.filesystem` fallback.
 - `npm run test:real` — optional. Reads gitignored `iptv-auth.txt`; also needs
   `node proxy/server.js` on port 8787 and the mock server.
+- `npm run verify` — L1 + L2 + L4 (full UI + native). Use before packaging or
+  releasing.
 - `npm run package` — builds only `dist/PerfectIPTV-<version>.wgt`; there is no
   `-latest` alias.
 - `TIZEN_PROFILE=... npm run package` — optional signed build; needs Tizen
   Studio's `tizen` on PATH.
-- No lint, typecheck, or formatter config. Verify JS with
-  `for f in js/*.js; do node --check "$f"; done` and XML with
-  `xmllint --noout config.xml`.
+- No lint, typecheck, or formatter config. `npm run check` is the static gate.
 - Tests are standalone scripts; there is no Playwright runner config, so run the
   npm scripts rather than `npx playwright test`.
 
 ## Architecture
 
 - Classic scripts only; no bundler or ESM. Script order in `index.html` matters:
-  hls → core → ui → player → screens → app. Each attaches to global `IPTV`.
-- `js/core.js` owns Store/localStorage and `IPTV.Xtream`. Providers often omit
-  CORS: `request()` tries `fetch`, then native `tizen.download` +
-  `tizen.filesystem` (serial queue, `wgt-private-tmp`), then an optional proxy.
-  Do not remove the native path; `test:native` covers it. The download and
-  filesystem privileges in `config.xml` are required for it.
+  lib/* → core → ui → player → screens → app-live → app-vod → app-series →
+  app-account → app-catalog → app. Each attaches to global `IPTV`;
+  `scripts/check-manifest.js` enforces the order.
+- `js/lib/*` are pure modules (text, format, URL, async, catalog, history,
+  Store, Xtream). They may only attach exports to `window.IPTV`; no DOM,
+  timers in pure logic, or Tizen APIs. They use a UMD-lite wrapper so
+  `node:test` can require them directly.
+- `js/core.js` owns DOM helpers and the native downloader. Providers often omit
+  CORS: `Xtream.request()` in `js/lib/xtream.js` tries `fetch`, then native
+  `tizen.download` + `tizen.filesystem` (serial queue, `wgt-private-tmp`),
+  then an optional proxy. Do not remove the native path; `test:native` covers
+  it. The download and filesystem privileges in `config.xml` are required.
 - `js/player.js` uses AVPlay first. Tizen requires
   `<object id="av-player" type="application/avplayer">` in `index.html`,
   `setDisplayRect(0,0,1920,1080)`, and transparent `html`/`body` while
   `body.playing`; do not make the root opaque or remove the object. HTML5/hls.js
   is fallback only.
-- `js/app.js` is controller/routing; `js/screens.js` builds HTML;
+- `js/app.js` is boot/routing/shared state/event wiring. Feature modules
+  register on `IPTV.App` (`live`, `vod`, `series`, `catalog`, `auth`) and use
+  `IPTV.App.util` for shared helpers. `App.account` is the active account
+  object; the login module is `App.auth`. `js/screens.js` builds HTML;
   `js/ui.js` is spatial focus and modals. Escape provider data with `IPTV.esc`
   or `UI.img`; never inject raw names or URLs.
+- `docs/architecture.md` is the detailed module map and validation ladder.
 - UI is fixed at 1920×1080 (meta viewport and px CSS); test at that size.
   Remote keys: Back is 10009, focusable elements use `data-focusable`, and player
   keys are captured before the UI handler.

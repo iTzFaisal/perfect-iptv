@@ -1,6 +1,10 @@
 /* ============================================================
    Perfect IPTV — screen renderers
    ============================================================ */
+/* @requires: IPTV.esc, IPTV.icon, IPTV.UI, IPTV.Store, IPTV.SORT_OPTIONS,
+               IPTV.sortLabel, IPTV.fmtTime, IPTV.fmtDate, IPTV.fmtDuration,
+               IPTV.fmtAgo
+   @exports: IPTV.Screens */
 (function () {
   'use strict';
 

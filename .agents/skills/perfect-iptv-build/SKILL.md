@@ -63,6 +63,9 @@ Keep these files in sync:
 - User-facing examples in `README.md`, `scripts/deploy.sh`, and
   `.github/workflows/release.yml`
 
+`npm run check` fails on a mismatch between the first four and warns about stale
+examples.
+
 Check for stale references:
 
 ```sh
@@ -74,14 +77,17 @@ The historical example in `AGENTS.md` is expected to keep older numbers.
 
 ## 4. Verify
 
-Run syntax checks:
+Run the fast gates first:
 
 ```sh
-for f in js/*.js; do node --check "$f"; done
-xmllint --noout config.xml
+npm run check
+npm run test:unit
 ```
 
-Run both UI suites. The mock provider must be serving
+`npm run check` verifies JS syntax, XML, version sync, script order, and
+whitespace. It must pass before packaging.
+
+Run the browser suites. The mock provider must be serving
 `http://localhost:4173`:
 
 ```sh
@@ -91,12 +97,15 @@ npm run serve
 In another shell:
 
 ```sh
+npm run test:smoke
 npm test
 npm run test:native
 ```
 
-Stop the mock server when finished. If a test fails, fix the code and rerun the
-failed suite; do not package or report a broken build as successful.
+`npm run verify` runs the static, unit, full UI, and native suites in one
+command; it still needs the mock server. Stop the mock server when finished. If
+a test fails, fix the code and rerun the failed suite; do not package or report a
+broken build as successful.
 
 ## 5. Build the WGT
 

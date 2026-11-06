@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  # The Playwright tests use the runner's preinstalled Google Chrome.
+  PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
+
+jobs:
+  static:
+    name: Static checks and unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install xmllint
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libxml2-utils
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run static checks
+        run: npm run check
+
+      - name: Run unit tests
+        run: npm run test:unit
+
+  smoke:
+    name: Browser smoke test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: static
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Start the mock provider and run the smoke suite
+        run: |
+          set -euo pipefail
+          google-chrome --version
+          npm run serve &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+          READY=0
+          for _ in $(seq 1 30); do
+            if curl -fsS http://localhost:4173/ >/dev/null 2>&1; then
+              READY=1
+              break
+            fi
+            sleep 1
+          done
+          if [[ "$READY" != 1 ]]; then
+            echo "::error::Mock Xtream server did not start on port 4173."
+            exit 1
+          fi
+          npm run test:smoke

@@ -1,6 +1,8 @@
 /* ============================================================
    Perfect IPTV — AVPlay (Samsung hardware) + HTML5/hls.js player
    ============================================================ */
+/* @requires: IPTV.$, IPTV.UI, IPTV.Store, IPTV.fmtTime, IPTV.fmtPosition
+   @exports: IPTV.Player */
 (function () {
   'use strict';
 

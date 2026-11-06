@@ -273,20 +273,38 @@ Password: demo
 ```
 
 The mock server serves a realistic Xtream API, sample live channels, movies,
-series, EPG and a public HLS test stream. The 404 for
+series, EPG and a small local HLS stream. The 404 for
 `$WEBAPIS/webapis/webapis.js` is normal in a desktop browser; Tizen injects
 that script on the TV.
 
+### Testing
+
+Run the fastest checks after every edit and the full suite before packaging:
+
 ```sh
-npm test              # full Playwright UI flow with the mock provider
-npm run test:native   # CORS-blocked provider + emulated Tizen downloader
-npm run test:real     # optional real-provider smoke test
-npm run package       # build dist/PerfectIPTV-1.0.6.wgt
+npm run check         # L1: syntax, XML, versions, script order, whitespace
+npm run test:unit     # L2: node:test, no browser
+npm run test:smoke    # L3: login, live, one playback, reload
+npm test              # L4: full Playwright UI flow with the mock provider
+npm run test:native   # L4: CORS-blocked provider + emulated Tizen downloader
+npm run verify        # L1 + L2 + L4
 ```
 
-`npm run test:real` reads `iptv-auth.txt` (gitignored) and expects the local
-proxy on port 8787. Screenshots from the mock test are written to
-`screenshots/`.
+Start `npm run serve` in another shell before `test:smoke`, `test`, or
+`test:native`. The UI suite fails on wrong behavior, page errors, console
+errors, and HTTP 4xx/5xx responses.
+
+Useful focused runs:
+
+```sh
+ONLY=sort npm test              # one step plus its dependencies
+ONLY=movies,recent npm test     # several steps
+SMOKE=1 npm test                # same as test:smoke
+```
+
+`npm run test:real` is optional. It reads `iptv-auth.txt` (gitignored) and
+expects the local proxy on port 8787. Screenshots from the mock test are written
+to `screenshots/`.
 
 The Playwright tests use `channel: 'chrome'`. If Chrome is not installed,
 change the test launcher to use bundled Chromium and run
@@ -300,23 +318,36 @@ index.html               App shell, login, player, modal layers
 icon.png                 512×512 app icon
 css/app.css              10-foot TV UI, focus states, player overlay
 js/
-  core.js                Utilities, localStorage, Xtream API, native downloader
+  lib/                   Pure modules: text, format, URL, catalog, history,
+                         Store, Xtream client (Node-testable)
+  core.js                DOM helpers and the Tizen native downloader
   ui.js                  Spatial D-pad focus, modals, toasts, TV keys
   player.js              AVPlay + HTML5/hls.js playback, seek, resume, next
   screens.js             Live, movies, series, favorites, search, settings
-  app.js                 Routing, login, data loading, EPG, favorites
+  app-live.js            Channels, preview, EPG, zapping, catch-up
+  app-vod.js             Movies, detail, resume, playback
+  app-series.js          Series, seasons, episodes, next episode
+  app-account.js         Login, saved accounts, settings actions
+  app-catalog.js         Section search and sorting
+  app.js                 Boot, routing, shared state, event wiring
+test/unit/               node:test suite and provider fixtures
 vendor/
   hls.min.js             HLS fallback for the browser player
 mock/server.js           Mock Xtream provider for local testing
+mock/media/              Small local HLS stream for deterministic playback
 proxy/
   worker.mjs             Cloudflare Worker CORS proxy
   server.js              Local Node CORS proxy
 scripts/
+  check.sh               Fast static gate
+  check-version.js       Version sync check
+  check-manifest.js      index.html script order check
   package.sh             Build dist/PerfectIPTV-1.0.6.wgt
   deploy.sh              sdb/tizen install helper
-  test-ui.js             Playwright UI flow
+  test-ui.js             Playwright UI flow with assertions
   test-native.js         Native-downloader fallback test
   test-real.js           Optional live-provider smoke test
+docs/architecture.md     Module map and validation ladder
 docs/                    README screenshots
 dist/                    Generated package (not committed)
 ```

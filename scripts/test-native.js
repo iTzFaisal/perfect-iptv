@@ -3,6 +3,7 @@
    It blocks fetch() (simulating a provider with no CORS headers) and
    emulates tizen.download + tizen.filesystem. */
 const { chromium } = require('playwright');
+const assert = require('node:assert/strict');
 const path = require('path');
 const fs = require('fs');
 
@@ -92,30 +93,60 @@ fs.mkdirSync(OUT, { recursive: true });
   page.on('console', (msg) => {
     if (msg.type() === 'error') errors.push('CONSOLE: ' + msg.text());
   });
+  page.on('response', (res) => {
+    // The app falls back to native downloads, so only page assets count here.
+    if (res.status() >= 400 && res.url().startsWith(BASE)) {
+      errors.push('HTTP ' + res.status() + ': ' + res.url());
+    }
+  });
 
-  await page.goto(BASE, { waitUntil: 'networkidle' });
-  await page.fill('#login-server', BASE);
-  await page.fill('#login-username', 'demo');
-  await page.fill('#login-password', 'demo');
-  await page.click('#login-submit');
-  await page.waitForSelector('#shell:not(.hidden)', { timeout: 20000 });
-  await page.waitForSelector('.channel-card', { timeout: 20000 });
-  await page.waitForTimeout(1000);
-  await page.screenshot({ path: path.join(OUT, '12-native-fallback.png') });
+  const ran = [];
+  async function step(name, fn) {
+    console.log('\n▶ ' + name);
+    await fn();
+    ran.push(name);
+    console.log('✓ ' + name);
+  }
 
-  const stats = await page.evaluate(() => ({
-    blockedFetch: window.__blockedFetch,
-    nativeDownloads: window.__nativeDownloads,
-    leftoverFiles: Object.keys(window.__nativeFiles).length,
-    channels: document.querySelectorAll('.channel-card').length,
-    preview: document.querySelector('.preview-name') && document.querySelector('.preview-name').textContent
-  }));
-  console.log('native fallback:', stats);
-  console.log('errors:', errors.length ? errors : 'none');
+  try {
+    await step('native-login', async () => {
+      await page.goto(BASE, { waitUntil: 'networkidle' });
+      await page.fill('#login-server', BASE);
+      await page.fill('#login-username', 'demo');
+      await page.fill('#login-password', 'demo');
+      await page.click('#login-submit');
+      await page.waitForSelector('#shell:not(.hidden)', { timeout: 20000 });
+      await page.waitForSelector('#view .channel-card', { timeout: 20000 });
+      await page.waitForTimeout(500);
+    });
 
-  const ok = stats.channels > 0 && stats.nativeDownloads > 0 && stats.blockedFetch > 0;
-  await browser.close();
-  if (!ok) process.exit(1);
+    await step('native-fallback', async () => {
+      const stats = await page.evaluate(() => ({
+        blockedFetch: window.__blockedFetch,
+        nativeDownloads: window.__nativeDownloads,
+        apiMode: window.IPTV.apiMode,
+        leftoverFiles: Object.keys(window.__nativeFiles).length,
+        channels: document.querySelectorAll('.channel-card').length,
+        preview: document.querySelector('.preview-name') && document.querySelector('.preview-name').textContent
+      }));
+
+      assert.ok(stats.blockedFetch > 0, 'fetch should be blocked during the native-fallback test');
+      assert.ok(stats.nativeDownloads > 0, 'the native downloader should be used');
+      assert.equal(stats.apiMode, 'native', 'the app should report native API mode');
+      assert.ok(stats.channels > 0, 'channels should load through the native downloader');
+      assert.ok(stats.preview, 'a focused channel should have a preview');
+      assert.equal(stats.leftoverFiles, 0, 'temporary native download files should be deleted');
+      await page.screenshot({ path: path.join(OUT, '12-native-fallback.png') });
+      console.log('native stats:', stats);
+    });
+
+    assert.deepEqual(errors, [], 'browser errors:\n' + errors.join('\n'));
+    console.log('\nSteps:  ' + ran.join(', '));
+    console.log('Errors: none');
+    console.log('NATIVE TEST PASSED');
+  } finally {
+    await browser.close();
+  }
 })().catch((err) => {
   console.error('NATIVE TEST FAILED:', err);
   process.exit(1);

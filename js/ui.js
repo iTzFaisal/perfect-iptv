@@ -1,6 +1,8 @@
 /* ============================================================
    Perfect IPTV — UI runtime, spatial navigation, modal system
    ============================================================ */
+/* @requires: IPTV.$, IPTV.$$, IPTV.esc, IPTV.icon, IPTV.initials
+   @exports: IPTV.UI */
 (function () {
   'use strict';
 

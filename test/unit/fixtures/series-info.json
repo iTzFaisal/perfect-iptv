@@ -1,0 +1,22 @@
+{
+  "seasons": [
+    { "season_number": 1, "name": "Season 1" },
+    { "season_number": 2, "name": "Season 2" }
+  ],
+  "info": {
+    "name": "The Division",
+    "cover": "/art?k=series&t=The%20Division&i=1",
+    "plot": "A team learns to trust each other.",
+    "releaseDate": "2023-05-12",
+    "rating": "7.4"
+  },
+  "episodes": {
+    "1": [
+      { "id": 9111, "episode_num": 1, "title": "The Beginning", "container_extension": "mp4", "season": 1 },
+      { "id": "9112", "episode_num": 2, "title": "Crossroads", "container_extension": "mp4", "season": 1 }
+    ],
+    "2": [
+      { "id": 9211, "episode_num": 1, "title": "A New Day", "container_extension": "mp4", "season": 2 }
+    ]
+  }
+}

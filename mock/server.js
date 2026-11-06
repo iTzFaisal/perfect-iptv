@@ -8,7 +8,8 @@ const { URL } = require('url');
 
 const ROOT = path.resolve(__dirname, '..');
 const PORT = Number(process.env.PORT || 4173);
-const HLS = 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8';
+// Small local HLS asset so UI tests do not depend on an external test stream.
+const HLS = '/mock-media/stream.m3u8';
 
 const liveCategories = [
   { category_id: '1', category_name: 'News & World', parent_id: 0 },
@@ -306,7 +307,8 @@ const MIME = {
   '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8',
   '.js': 'application/javascript; charset=utf-8', '.json': 'application/json; charset=utf-8',
   '.png': 'image/png', '.svg': 'image/svg+xml', '.ico': 'image/x-icon',
-  '.woff2': 'font/woff2', '.ttf': 'font/ttf'
+  '.woff2': 'font/woff2', '.ttf': 'font/ttf',
+  '.m3u8': 'application/vnd.apple.mpegurl', '.ts': 'video/mp2t'
 };
 
 const server = http.createServer((req, res) => {
@@ -320,6 +322,13 @@ const server = http.createServer((req, res) => {
   }
   if (url.pathname === '/art') {
     return send(res, 200, artSvg(url.searchParams.get('k') || 'vod', url.searchParams.get('t') || 'Untitled', url.searchParams.get('i') || 1), 'image/svg+xml');
+  }
+  if (url.pathname.startsWith('/mock-media/')) {
+    const file = path.join(ROOT, 'mock', 'media', path.basename(url.pathname));
+    return fs.readFile(file, (err, data) => {
+      if (err) return send(res, 404, 'Not found');
+      send(res, 200, data, MIME[path.extname(file)] || 'application/octet-stream');
+    });
   }
   if (url.pathname.startsWith('/live/') || url.pathname.startsWith('/movie/') || url.pathname.startsWith('/series/')) {
     res.writeHead(302, { Location: HLS, 'Access-Control-Allow-Origin': '*' });
