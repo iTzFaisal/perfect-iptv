@@ -20,8 +20,8 @@ Inspect the working tree and determine the version to build:
 ```sh
 git status --short
 VERSION=$(xmllint --xpath 'string(/*[local-name()="widget"]/@version)' config.xml)
-LATEST_TAG=$(git tag --sort=-v:refname | head -1)
-echo "config=$VERSION latest=$LATEST_TAG"
+LATEST_TAG=$(git tag --list 'v*' --sort=-v:refname | head -1)
+echo "config=$VERSION latest=${LATEST_TAG:-none}"
 ```
 
 Build from the working tree as-is. Do not discard or revert changes you did not
@@ -34,11 +34,17 @@ Keep `dist/`, `screenshots/`, and `iptv-auth.txt` out of git.
 
 The goal is a version that can be installed over the copy already on the TV.
 
+- If there are no `v*` tags, keep the version in `config.xml`; it is the first
+  release of the current line.
 - If `config.xml` is **ahead of** the latest `v*` tag, keep it. A previous build
   already claimed this unreleased version.
 - If `config.xml` **matches** the latest tag, bump the patch by one:
-  `1.0.6` becomes `1.0.7`, never `1.1.0` unless the user asks.
+  `0.1.1` becomes `0.1.2`, never `0.2.0` unless the user asks.
 - If `config.xml` is behind the latest tag, use the latest tag plus one.
+
+The `1.x` line was retired at the `0.1.1` reset. Do not compare against or
+recreate `v1.*` tags. If a TV still has a `1.x` build installed, it must be
+uninstalled before the `0.1.x` package can replace it.
 
 If a WGT for the chosen version was already installed on the TV and the TV
 refuses to reinstall it, bump the patch again so the package is a real upgrade.
@@ -73,7 +79,8 @@ rg "<old-version>" --glob '!node_modules/**' --glob '!dist/**'
 rg "<new-version>" --glob '!node_modules/**' --glob '!dist/**'
 ```
 
-The historical example in `AGENTS.md` is expected to keep older numbers.
+After the `0.1.1` reset, no old-version hits are expected. Update any that
+remain.
 
 ## 4. Verify
 

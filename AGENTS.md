@@ -71,11 +71,13 @@ only; do not build or port it.
   vendor`. Add new runtime files there.
 - The build fails if `config.xml` and `package.json` versions differ. Tizen uses
   the `config.xml` version; `package.json` is only npm metadata.
-- **Version bumps are patch-only:** always increase the last number
-  (`1.0.4` → `1.0.5` → `1.0.6`). Do not bump the major or minor part unless the
-  user explicitly asks. Keep `config.xml`, `package.json`, `package-lock.json`,
-  `js/app.js` (`VERSION`), the Settings version fallback, and README/deploy
-  examples in sync.
+- **Version bumps are patch-only within the current 0.x line:** always increase
+  the last number (`0.1.1` → `0.1.2`). Do not bump the major or minor part
+  unless the user explicitly asks. The 1.x line was retired on 2026-11-06; its
+  tags and releases were removed deliberately, so do not recreate 1.x tags.
+  Keep `config.xml`, `package.json`, `package-lock.json`, `js/app.js`
+  (`VERSION`), the Settings version fallback, and README/deploy examples in
+  sync.
 - Pushing a `v*` tag runs `.github/workflows/release.yml`: it verifies the tag
   matches `config.xml`, runs both Playwright suites, builds the WGT, and
   publishes the package and `.sha256` to GitHub Releases. The tag must be `v` +

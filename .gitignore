@@ -7,3 +7,4 @@ dist/
 iptv-auth.txt
 *.secret
 .env
+backup/

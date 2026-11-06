@@ -32,7 +32,7 @@ git branch --show-current
 git remote -v
 git fetch origin
 git log --oneline -5
-git tag --sort=-v:refname | head -10
+git tag --list 'v*' --sort=-v:refname | head -10
 gh auth status
 ```
 
@@ -44,23 +44,30 @@ Never stage or commit `dist/`, `screenshots/`, `iptv-auth.txt`, or credentials.
 
 ## Bump the version
 
-Versions are **patch-only** unless the user explicitly asks for a major or minor
-bump: `1.0.6` becomes `1.0.7`, never `1.1.0` on your own initiative.
+Versions are **patch-only within the current 0.x line** unless the user
+explicitly asks for a major or minor bump: `0.1.1` becomes `0.1.2`, never
+`0.2.0` on your own initiative.
 
 Read the current version from `config.xml` and compare it with the latest `v*`
 tag:
 
 ```sh
 VERSION=$(xmllint --xpath 'string(/*[local-name()="widget"]/@version)' config.xml)
-LATEST_TAG=$(git tag --sort=-v:refname | head -1)
-echo "config=$VERSION latest=$LATEST_TAG"
+LATEST_TAG=$(git tag --list 'v*' --sort=-v:refname | head -1)
+echo "config=$VERSION latest=${LATEST_TAG:-none}"
 ```
 
+- If there are no `v*` tags, keep the version in `config.xml`; it is the first
+  release of the current line.
 - If `config.xml` is already ahead of the latest tag, keep it. A previous
   `perfect-iptv-build` skill run already claimed this unreleased version; skip
   the bump.
 - If it matches the latest tag, bump the patch.
 - If it is behind the latest tag, use the latest tag plus one.
+
+The `1.x` line was retired at the `0.1.1` reset. Do not compare against or
+recreate `v1.*` tags. If a TV still has a `1.x` build installed, it must be
+uninstalled before the `0.1.x` package can replace it.
 
 When a bump is needed, update npm metadata with:
 
@@ -84,7 +91,8 @@ rg "<old-version>" --glob '!node_modules/**' --glob '!dist/**'
 rg "<new-version>" --glob '!node_modules/**' --glob '!dist/**'
 ```
 
-The only acceptable old-version hit is the historical example in `AGENTS.md`.
+After the `0.1.1` reset, no old-version hits are expected. Update any that
+remain.
 
 ## Verify before committing
 

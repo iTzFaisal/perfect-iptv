@@ -166,9 +166,11 @@ Playwright suites, builds the WGT, and publishes it.
 ## Versioning and packaging
 
 - `config.xml` is the source of truth for the Tizen version.
+- The project restarted at `0.1.1` on 2026-11-06. The `1.x` line is retired and
+  its tags/releases were removed; do not recreate them.
 - Keep `package.json`, `package-lock.json`, `js/app.js` (`VERSION`), and the
   Settings fallback in `js/screens.js` in sync. `npm run check` verifies them.
-- Bump patch versions only unless the user explicitly asks otherwise.
+- Bump `0.x` patch versions only unless the user explicitly asks otherwise.
 - `scripts/package.sh` packages `config.xml index.html icon.png css js vendor`.
   New runtime directories must be added there.
 - The WGT is unsigned by design. Tizen Homebrew or Tizen Studio signs it.
