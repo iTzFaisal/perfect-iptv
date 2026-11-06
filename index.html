@@ -221,6 +221,26 @@
           </div>
         </div>
       </div>
+      <div id="player-seek" class="player-seek" aria-hidden="true">
+        <div class="seek-card">
+          <div class="seek-head">
+            <div class="seek-direction">
+              <svg class="icon"><use id="player-seek-icon" href="#i-skip-fwd"/></svg>
+              <span id="player-seek-action">Forward</span>
+            </div>
+            <div class="seek-speed-chip" id="player-seek-speed">10 sec</div>
+          </div>
+          <div class="seek-main">
+            <strong class="seek-delta" id="player-seek-delta">+10s</strong>
+            <span class="seek-time"><span id="player-seek-position">00:00</span><i>/</i><span id="player-seek-duration">00:00</span></span>
+          </div>
+          <div class="seek-track"><span class="seek-track-fill" id="player-seek-fill"></span></div>
+          <div class="seek-foot">
+            <span id="player-seek-hint">Hold to seek faster</span>
+            <span id="player-seek-note">Tap = 10 sec</span>
+          </div>
+        </div>
+      </div>
     </div>
 
     <div id="loading-overlay" class="loading-overlay hidden">
@@ -235,6 +255,7 @@
   <script src="vendor/hls.min.js"></script>
   <script src="js/lib/text.js"></script>
   <script src="js/lib/format.js"></script>
+  <script src="js/lib/seek.js"></script>
   <script src="js/lib/url.js"></script>
   <script src="js/lib/async.js"></script>
   <script src="js/lib/catalog.js"></script>

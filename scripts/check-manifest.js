@@ -91,6 +91,7 @@ for (const file of chain) {
 const libOrder = [
   'js/lib/text.js',
   'js/lib/format.js',
+  'js/lib/seek.js',
   'js/lib/url.js',
   'js/lib/async.js',
   'js/lib/catalog.js',

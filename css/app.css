@@ -1287,7 +1287,10 @@ body.playing .boot-screen { display: none; }
   display: flex;
   align-items: center;
   gap: 28px;
+  transition: opacity 0.18s ease, visibility 0.18s ease;
 }
+.player.seeking .player-center { opacity: 0; visibility: hidden; }
+.player.seeking .player-bottom { opacity: 0; visibility: hidden; }
 .round-btn {
   position: relative;
   width: 82px;
@@ -1309,12 +1312,107 @@ body.playing .boot-screen { display: none; }
 .round-btn:hover { background: rgba(255, 255, 255, 0.22); }
 .round-btn:focus { outline: none; border-color: #fff; background: rgba(255, 255, 255, 0.26); transform: scale(1.08); }
 .round-btn.big:focus { background: linear-gradient(135deg, #9279ff, #ff6b84); }
-.player-bottom { position: relative; z-index: 2; padding: 0 56px 42px; }
+.player-bottom {
+  position: relative;
+  z-index: 2;
+  padding: 0 56px 42px;
+  transition: opacity 0.18s ease, visibility 0.18s ease;
+}
 .progress-wrap { max-width: 100%; }
 .progress { height: 6px; border-radius: 4px; background: rgba(255, 255, 255, 0.18); overflow: hidden; }
 .progress-fill { height: 100%; width: 0%; border-radius: 4px; background: linear-gradient(90deg, var(--accent-2), var(--accent)); transition: width 0.2s linear; }
 .times { display: flex; justify-content: space-between; margin-top: 8px; color: rgba(255, 255, 255, 0.55); font-size: calc(13px * var(--text-scale)); font-variant-numeric: tabular-nums; }
 .player-hint { margin-top: 16px; color: rgba(255, 255, 255, 0.42); font-size: calc(13px * var(--text-scale)); text-align: center; }
+.player-seek {
+  position: absolute;
+  left: 50%;
+  bottom: 170px;
+  z-index: 3;
+  width: 580px;
+  transform: translate(-50%, 14px);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.18s ease, transform 0.18s ease, visibility 0.18s ease;
+}
+.player-seek.visible { opacity: 1; visibility: visible; transform: translate(-50%, 0); }
+.seek-card {
+  overflow: hidden;
+  border-radius: 18px;
+  background: rgba(9, 11, 18, 0.94);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.62);
+  backdrop-filter: blur(18px);
+}
+.seek-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 16px 18px 0;
+}
+.seek-direction {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: calc(13px * var(--text-scale));
+  font-weight: 800;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+}
+.seek-direction svg.icon { width: 18px; height: 18px; color: var(--accent); }
+.seek-speed-chip {
+  padding: 6px 11px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, var(--accent-2), var(--accent));
+  color: #fff;
+  font-size: calc(14px * var(--text-scale));
+  font-weight: 900;
+  letter-spacing: 0.4px;
+  box-shadow: 0 6px 20px rgba(255, 77, 109, 0.28);
+}
+.seek-main {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 8px 18px 16px;
+}
+.seek-delta {
+  font-size: calc(44px * var(--text-scale));
+  line-height: 1;
+  font-weight: 900;
+  letter-spacing: -1px;
+  color: #fff;
+  text-shadow: 0 3px 20px rgba(0, 0, 0, 0.6);
+  font-variant-numeric: tabular-nums;
+}
+.seek-time {
+  padding-bottom: 6px;
+  color: rgba(255, 255, 255, 0.74);
+  font-size: calc(15px * var(--text-scale));
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.seek-time i { font-style: normal; padding: 0 6px; color: rgba(255, 255, 255, 0.35); }
+.seek-track { height: 5px; background: rgba(255, 255, 255, 0.12); }
+.seek-track-fill {
+  display: block;
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, var(--accent-2), var(--accent));
+  transition: width 0.12s linear;
+}
+.seek-foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 18px 13px;
+  color: rgba(255, 255, 255, 0.48);
+  font-size: calc(13px * var(--text-scale));
+}
+.seek-foot span:last-child { color: rgba(255, 255, 255, 0.32); }
 .buffering {
   position: absolute;
   top: 50%;

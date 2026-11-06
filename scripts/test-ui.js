@@ -477,7 +477,44 @@ step('continue', ['live'], async () => {
   await page.waitForSelector('#player:not(.hidden)', { timeout: 10000 });
   assert.equal(await page.locator('#player').isVisible(), true, 'movie resume should open the player');
   assert.equal(await text('#player-kicker'), 'MOVIE', 'movie player kicker');
-  await page.waitForTimeout(800);
+  await page.waitForFunction(() => {
+    const video = document.querySelector('#html5-video');
+    return !!video && isFinite(video.duration) && video.duration > 0;
+  }, null, { timeout: 10000 });
+
+  // Holding the right arrow accelerates the seek while playback continues.
+  // Tizen remotes repeat keydown while held; Playwright sends one, so send
+  // repeats manually to exercise the same path.
+  await page.keyboard.down('ArrowRight');
+  await page.waitForTimeout(300);
+  await page.keyboard.down('ArrowRight');
+  await page.waitForTimeout(300);
+  await page.keyboard.down('ArrowRight');
+  await page.waitForTimeout(300);
+  const seeking = await page.evaluate(() => {
+    const hud = document.querySelector('#player-seek');
+    const video = document.querySelector('#html5-video');
+    return {
+      visible: hud.classList.contains('visible'),
+      speed: document.querySelector('#player-seek-speed').textContent.trim(),
+      delta: document.querySelector('#player-seek-delta').textContent.trim(),
+      paused: video.paused
+    };
+  });
+  assert.equal(seeking.visible, true, 'holding right should show the seek HUD');
+  assert.match(seeking.speed, /×/, 'hold should accelerate beyond the base seek step');
+  assert.notEqual(seeking.delta, '+10s', 'held seek should travel more than one tap');
+  assert.equal(seeking.paused, false, 'holding should keep playback running smoothly');
+  await page.screenshot({ path: path.join(OUT, '07b-seek.png') });
+
+  await page.keyboard.up('ArrowRight');
+  const released = await page.evaluate(() => ({
+    hudVisible: document.querySelector('#player-seek').classList.contains('visible'),
+    paused: document.querySelector('#html5-video').paused
+  }));
+  assert.equal(released.paused, false, 'releasing the key should keep playback running');
+  assert.equal(released.hudVisible, true, 'seek HUD should linger after release');
+
   await page.keyboard.press('Escape');
   await page.waitForSelector('#player', { state: 'hidden', timeout: 10000 });
   // Let the shared <video> element finish tearing down before reusing it.
@@ -499,6 +536,93 @@ step('continue', ['live'], async () => {
   await page.keyboard.press('Escape');
   await page.waitForSelector('#player', { state: 'hidden', timeout: 10000 });
   await page.waitForTimeout(400);
+});
+
+step('seek-avplay', ['continue'], async () => {
+  // Stub the Tizen AVPlay bridge so the hold-seek path can be exercised in a
+  // desktop browser. The video plane itself is not decoded.
+  await page.evaluate(() => {
+    window.__avCalls = [];
+    var state = 'NONE';
+    var listeners = {};
+    window.webapis = window.webapis || {};
+    window.webapis.avplay = {
+      open: function (url) { state = 'IDLE'; window.__avCalls.push(['open', url]); },
+      setDisplayRect: function (x, y, w, h) { window.__avCalls.push(['rect', x, y, w, h]); },
+      setDisplayMethod: function () {},
+      setListener: function (next) { listeners = next || {}; },
+      prepareAsync: function (ok) { state = 'READY'; setTimeout(ok, 0); },
+      getDuration: function () { return 120000; },
+      seekTo: function (ms) {
+        window.__avCalls.push(['seek', ms]);
+        if (listeners.oncurrentplaytime) listeners.oncurrentplaytime(ms);
+      },
+      play: function () { state = 'PLAYING'; },
+      pause: function () { state = 'PAUSED'; },
+      stop: function () { state = 'IDLE'; },
+      close: function () { state = 'NONE'; },
+      getState: function () { return state; },
+      suspend: function () {},
+      restore: function () {}
+    };
+  });
+
+  await page.click('.nav-item[data-view="movies"]');
+  await page.waitForSelector('#view .poster-card', { timeout: 15000 });
+  await openCategory('continue');
+  await page.waitForSelector('[data-action="resume-vod"]', { timeout: 15000 });
+  await page.click('[data-action="resume-vod"]');
+  await page.waitForSelector('#player:not(.hidden)', { timeout: 10000 });
+  assert.equal(await text('#player-kicker'), 'MOVIE', 'AVPlay seek test should play a movie');
+
+  await page.keyboard.down('ArrowRight');
+  await page.waitForTimeout(300);
+  await page.keyboard.down('ArrowRight');
+  await page.waitForTimeout(300);
+  await page.keyboard.down('ArrowRight');
+  await page.waitForTimeout(300);
+
+  const duringHold = await page.evaluate(() => ({
+    hudVisible: document.querySelector('#player-seek').classList.contains('visible'),
+    speed: document.querySelector('#player-seek-speed').textContent.trim(),
+    delta: document.querySelector('#player-seek-delta').textContent.trim(),
+    paused: window.webapis.avplay.getState() === 'PAUSED',
+    seekCalls: window.__avCalls.filter((call) => call[0] === 'seek').map((call) => call[1]),
+    rectCalls: window.__avCalls.filter((call) => call[0] === 'rect').map((call) => call.slice(1)),
+    thumbnails: document.querySelectorAll('#player-seek-image, #player-seek-frame').length
+  }));
+  assert.equal(duringHold.hudVisible, true, 'holding right should show the seek HUD');
+  assert.match(duringHold.speed, /×/, 'hold should accelerate beyond the base seek step');
+  assert.notEqual(duringHold.delta, '+10s', 'held seek should travel more than one tap');
+  assert.equal(duringHold.paused, false, 'held seek should not pause AVPlay');
+  assert.equal(duringHold.seekCalls.length, 1,
+    'hold should apply one initial seek, not seek on every tick');
+  assert.equal(duringHold.seekCalls[0], 10000, 'first seek should be the base 10 seconds');
+  assert.deepEqual(duringHold.rectCalls, [[0, 0, 1920, 1080]],
+    'seeking should never resize the video plane');
+  assert.equal(duringHold.thumbnails, 0, 'thumbnail elements should be removed');
+  await page.screenshot({ path: path.join(OUT, '12-seek-avplay.png') });
+
+  await page.keyboard.up('ArrowRight');
+  await page.waitForTimeout(150);
+  const afterRelease = await page.evaluate(() => {
+    const seekCalls = window.__avCalls.filter((call) => call[0] === 'seek').map((call) => call[1]);
+    const rectCalls = window.__avCalls.filter((call) => call[0] === 'rect').map((call) => call.slice(1));
+    return {
+      hudVisible: document.querySelector('#player-seek').classList.contains('visible'),
+      seekCalls: seekCalls,
+      rectCalls: rectCalls
+    };
+  });
+  assert.equal(afterRelease.hudVisible, true, 'seek HUD should linger after release');
+  assert.equal(afterRelease.seekCalls.length, 2, 'release should commit exactly one final seek');
+  assert.ok(afterRelease.seekCalls[1] > 10000, 'final seek should move beyond the first step');
+  assert.equal(afterRelease.rectCalls.length, 1, 'releasing should not resize the video plane');
+
+  await page.keyboard.press('Escape');
+  await page.waitForSelector('#player', { state: 'hidden', timeout: 10000 });
+  await page.waitForTimeout(300);
+  await page.evaluate(() => { if (window.webapis) delete window.webapis.avplay; });
 });
 
 step('play-live', ['live'], async () => {

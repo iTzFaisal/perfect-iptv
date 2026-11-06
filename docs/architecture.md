@@ -55,6 +55,7 @@ core chain keeps its order, and `app.js` is last. Add new runtime files to
 | --- | --- |
 | `js/lib/text.js` | `esc`, `icon`, `initials`, base64 text decoding |
 | `js/lib/format.js` | time, duration, position, date, relative-time formatting |
+| `js/lib/seek.js` | tap/hold seek acceleration curve and media clamping |
 | `js/lib/url.js` | server normalization, pasted provider URLs, absolute art URLs, ids |
 | `js/lib/async.js` | debounce, sleep, error text |
 | `js/lib/catalog.js` | sort options, stable sorting, recent list, search filter |
@@ -63,7 +64,7 @@ core chain keeps its order, and `app.js` is last. Add new runtime files to
 | `js/lib/xtream.js` | Xtream client, EPG normalization, URL builders |
 | `js/core.js` | DOM helpers and the Tizen native downloader |
 | `js/ui.js` | spatial D-pad focus, modals, toasts, remote keys |
-| `js/player.js` | AVPlay first, HTML5/hls.js fallback, resume, next episode |
+| `js/player.js` | AVPlay first, HTML5/hls.js fallback, accelerated hold-to-seek, resume, next episode |
 | `js/screens.js` | pure HTML templates for every view and detail modal |
 | `js/app-live.js` | channel list, preview, EPG, zapping, catch-up |
 | `js/app-vod.js` | movie list, detail, resume, playback |
@@ -133,14 +134,16 @@ after every script is present. Script order cannot be changed without updating
   `UI.img`; never inject raw names or URLs.
 - `js/player.js` uses AVPlay first. Keep
   `<object id="av-player" type="application/avplayer">`, the 1920×1080 display
-  rect, and transparent `html`/`body` while `body.playing`.
+  rect, and transparent `html`/`body` while `body.playing`. During a held seek
+  only the HUD advances; the engine seek is committed once on release. Do not
+  call `seekTo`/set `currentTime` on every repeat, or seeking will stutter.
 
 ## Validation ladder
 
 | Level | Covers | Command | Target |
 | --- | --- | --- | --- |
 | L1 static | syntax, XML, versions, script manifest, whitespace | `npm run check` | < 2 s |
-| L2 unit | format, URL, catalog, history, Store, Xtream | `npm run test:unit` | < 2 s |
+| L2 unit | format, seek, URL, catalog, history, Store, Xtream | `npm run test:unit` | < 2 s |
 | L3 smoke | login, live, one playback, reload | `npm run test:smoke` | < 60 s |
 | L4 full | full UI suite + native fallback | `npm test && npm run test:native` | minutes |
 | L5 package | WGT build, version/hash check, on-device install | `perfect-iptv-build` skill | minutes |

@@ -107,7 +107,7 @@ npm install
 npm run package
 ```
 
-This produces `dist/PerfectIPTV-0.1.2.wgt`.
+This produces `dist/PerfectIPTV-0.1.5.wgt`.
 
 To sign it with a Tizen Studio certificate profile instead:
 
@@ -115,7 +115,7 @@ To sign it with a Tizen Studio certificate profile instead:
 TIZEN_PROFILE=YOUR_PROFILE npm run package
 ```
 
-That produces `dist/PerfectIPTV-0.1.2-signed.wgt`. You can also re-sign the
+That produces `dist/PerfectIPTV-0.1.5-signed.wgt`. You can also re-sign the
 unsigned file manually; see Option B below.
 
 ### Optional proxy deployment
@@ -177,7 +177,7 @@ TV, re-signs packages for you, and gives you a phone interface for installing
    screen. Open that address on your phone and pair.
 
 5. In the phone interface, open **Upload** and choose
-   `dist/PerfectIPTV-0.1.2.wgt`. Tizen Homebrew re-signs it for your TV and
+   `dist/PerfectIPTV-0.1.5.wgt`. Tizen Homebrew re-signs it for your TV and
    installs it.
 
 6. Perfect IPTV now appears in the TV’s app list.
@@ -209,8 +209,8 @@ on your TV.
 
    ```sh
    mkdir -p dist/signed
-   cp dist/PerfectIPTV-0.1.2.wgt dist/signed/
-   tizen package -t wgt -s YOUR_PROFILE --output dist/signed -- dist/signed/PerfectIPTV-0.1.2.wgt
+   cp dist/PerfectIPTV-0.1.5.wgt dist/signed/
+   tizen package -t wgt -s YOUR_PROFILE --output dist/signed -- dist/signed/PerfectIPTV-0.1.5.wgt
    ```
 
    Or build the signed package directly:
@@ -219,28 +219,28 @@ on your TV.
    TIZEN_PROFILE=YOUR_PROFILE npm run package
    ```
 
-   This produces `dist/PerfectIPTV-0.1.2-signed.wgt`. If you use this path,
+   This produces `dist/PerfectIPTV-0.1.5-signed.wgt`. If you use this path,
    install that file from `dist/` instead of the re-signed copy in `dist/signed/`.
 
 5. Connect to the TV and install the **signed** package:
 
    ```sh
    sdb connect YOUR_TV_IP:26101
-   tizen install -n PerfectIPTV-0.1.2.wgt -s YOUR_TV_IP:26101 -- dist/signed
+   tizen install -n PerfectIPTV-0.1.5.wgt -s YOUR_TV_IP:26101 -- dist/signed
    tizen run -p iTzFaisal1 -s YOUR_TV_IP:26101
    ```
 
    Or use the helper:
 
    ```sh
-   scripts/deploy.sh YOUR_TV_IP dist/signed/PerfectIPTV-0.1.2.wgt
+   scripts/deploy.sh YOUR_TV_IP dist/signed/PerfectIPTV-0.1.5.wgt
    ```
 
 If your firmware rejects `tizen install`, see the field guide
 [Sideloading an IPTV App onto a Retail Samsung Smart TV](https://github.com/AscendedStarr/samsung-tv-iptv-guide)
 for the `vd_appinstall` path and certificate/DUID details.
 
-A retail TV will not accept the unsigned `dist/PerfectIPTV-0.1.2.wgt`
+A retail TV will not accept the unsigned `dist/PerfectIPTV-0.1.5.wgt`
 directly. It must be signed for that TV. That is what Tizen Homebrew or Tizen
 Studio does.
 
@@ -250,13 +250,13 @@ Studio does.
 | ----------------------------- | --------------------------------------------------------------------------- |
 | Arrows                        | Move focus                                                                  |
 | OK                            | Select; play/pause in the player                                            |
-| Left / Right (in player)      | Seek back / forward 10 seconds                                              |
+| Left / Right (in player)      | Tap to seek 10 seconds; hold to rewind / fast-forward faster                |
 | Up / Down (in player)         | Show the player controls                                                    |
 | Back / Return                 | Close the player, go back, or exit the app from Live TV                     |
 | Info                          | Open the TV guide for the focused channel; in a live stream, show the guide |
 | Channel Up / Down (in player) | Previous / next live channel                                                |
 | Media Play/Pause/Stop         | Player controls                                                             |
-| Media Rewind/Fast Forward     | Seek back / forward 10 seconds                                              |
+| Media Rewind/Fast Forward     | Same as Left / Right: tap 10 seconds, hold to accelerate                    |
 | In a text field               | OK opens the keyboard; Back closes it                                       |
 
 Back on the Live TV root is a double-press exit, so a single accidental press
@@ -347,7 +347,7 @@ scripts/
   check.sh               Fast static gate
   check-version.js       Version sync check
   check-manifest.js      index.html script order check
-  package.sh             Build dist/PerfectIPTV-0.1.2.wgt
+  package.sh             Build dist/PerfectIPTV-0.1.5.wgt
   deploy.sh              sdb/tizen install helper
   test-ui.js             Playwright UI flow with assertions
   test-native.js         Native-downloader fallback test
