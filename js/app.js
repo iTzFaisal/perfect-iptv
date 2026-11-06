@@ -21,7 +21,7 @@
   var Screens = IPTV.Screens;
   var Player = IPTV.Player;
 
-  var VERSION = '1.0.6';
+  var VERSION = '1.1.0';
   var SEARCH_LABELS = { live: 'Live TV', vod: 'Movies', series: 'Series' };
   var TEXT_SIZES = { standard: 1.25, large: 1.5, xlarge: 1.7 };
 
