@@ -158,9 +158,10 @@ npm run serve
 runs only the smoke steps. Every UI step asserts, console/page errors fail the
 suite, and HTTP 4xx/5xx responses fail the suite.
 
-CI (`.github/workflows/ci.yml`) runs L1/L2 on every push and pull request, then
-L3. The release workflow runs the static checks and both full Playwright suites
-before building the WGT.
+There is no push/pull-request CI workflow. Run the ladder locally with
+`npm run verify`. The release workflow (`.github/workflows/release.yml`) runs on
+`v*` tags: it verifies the version, runs the static checks and both full
+Playwright suites, builds the WGT, and publishes it.
 
 ## Versioning and packaging
 
